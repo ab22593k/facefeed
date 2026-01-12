@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -129,6 +130,7 @@ func main() {
 	}
 
 	if len(parsedImages) > 0 {
+
 		results := uploadMultipleImages(parsedImages, finalMessage, accessToken, pageID)
 		printResultsSummary(results)
 	} else if *link != "" {
@@ -162,7 +164,7 @@ func validateInputs(imagePaths []string, message string) ([]ImageInput, *Validat
 			}
 
 			ext := strings.ToLower(filepath.Ext(path))
-			validExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".bmp": true, ".tiff": true, ".webp": true}
+			validExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".bmp": true, ".tiff": true, ".webp": true, ".svg": true}
 			if !validExts[ext] {
 				result.Warnings = append(result.Warnings, fmt.Sprintf("File %s has potentially unsupported extension: %s", img.Filename, ext))
 			}
@@ -279,7 +281,25 @@ func postImageURL(pageID, message, imageURL, accessToken string) (string, error)
 func postImageFile(pageID, message, filePath, accessToken string) (string, error) {
 	apiURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/photos", pageID)
 
-	file, err := os.Open(filePath)
+	uploadPath := filePath
+	isSVG := strings.ToLower(filepath.Ext(filePath)) == ".svg"
+
+	if isSVG {
+		// Check if ImageMagick's convert command exists
+		if _, err := exec.LookPath("convert"); err != nil {
+			return "", fmt.Errorf("SVG files require ImageMagick (convert command not found).\nInstall: apt-get install imagemagick (Linux) or brew install imagemagick (macOS)")
+		}
+
+		tempPNG := filePath + ".temp.png"
+		cmd := exec.Command("convert", filePath, tempPNG)
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("failed to convert SVG to PNG: %v", err)
+		}
+		uploadPath = tempPNG
+		defer os.Remove(tempPNG)
+	}
+
+	file, err := os.Open(uploadPath)
 	if err != nil {
 		return "", err
 	}
@@ -300,7 +320,7 @@ func postImageFile(pageID, message, filePath, accessToken string) (string, error
 		_ = multiWriter.WriteField("access_token", accessToken)
 		_ = multiWriter.WriteField("caption", message)
 
-		part, err := multiWriter.CreateFormFile("source", filepath.Base(filePath))
+		part, err := multiWriter.CreateFormFile("source", filepath.Base(uploadPath))
 		if err != nil {
 			errChan <- err
 			return
