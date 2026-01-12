@@ -1,77 +1,471 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/schollz/progressbar/v3"
 )
 
+// ImageList is a custom flag type to support multiple image flags
+type ImageList []string
+
+func (i *ImageList) String() string {
+	return strings.Join(*i, ", ")
+}
+
+func (i *ImageList) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
+type ImageInput struct {
+	Path     string
+	Type     string // "url" or "file"
+	Size     int64
+	Filename string
+}
+
+type UploadResult struct {
+	Filename string
+	Success  bool
+	PostID   string
+	Error    error
+}
+
+type ValidationResult struct {
+	Valid     bool
+	Images    []ImageInput
+	Errors    []string
+	Warnings  []string
+	TotalSize int64
+}
+
+var client *http.Client
+
 func main() {
-	// Load .env file if it exists
 	_ = godotenv.Load()
 
-	pageID := os.Getenv("FB_PAGE_ID")
-	accessToken := os.Getenv("FB_ACCESS_TOKEN")
+	// Load environment variables
+	envPageID := os.Getenv("FB_PAGE_ID")
+	envToken := os.Getenv("FB_ACCESS_TOKEN")
+	envMessage := os.Getenv("FB_MESSAGE")
+	envImages := os.Getenv("FB_IMAGES")
 
-	message := flag.String("message", "", "The text message/caption to post (required)")
+	var images ImageList
+	messageFlag := flag.String("message", "", "The text message/caption to post (required if no images)")
 	link := flag.String("link", "", "Optional URL to share as a link post")
-	photo := flag.String("photo", "", "Optional public URL to an image to post as a photo")
+	dryRun := flag.Bool("dry-run", false, "Validate inputs without uploading")
+	rollback := flag.Bool("rollback", false, "Delete the latest published post")
+	timeout := flag.Duration("timeout", 60*time.Second, "HTTP request timeout")
+	flag.Var(&images, "image", "Path to local image file or URL (can be specified multiple times)")
 	flag.Parse()
 
-	if pageID == "" || accessToken == "" || *message == "" {
+	client = &http.Client{Timeout: *timeout}
+
+	// Priority: CLI > ENV
+	finalMessage := *messageFlag
+	if finalMessage == "" {
+		finalMessage = envMessage
+	}
+
+	allImagePaths := images
+	if len(allImagePaths) == 0 && envImages != "" {
+		paths := strings.Split(envImages, ",")
+		for _, p := range paths {
+			allImagePaths = append(allImagePaths, strings.TrimSpace(p))
+		}
+	}
+
+	pageID := envPageID
+	accessToken := envToken
+
+	if pageID == "" || accessToken == "" {
 		fmt.Println("Error: FB_PAGE_ID and FB_ACCESS_TOKEN environment variables must be set.")
-		fmt.Println("Usage: go run main.go -message=\"Your message\" [-link=<url> | -photo=<image_url>]")
+		os.Exit(1)
+	}
+
+	if *rollback {
+		rollbackLatestPost(pageID, accessToken)
+		os.Exit(0)
+	}
+
+	if finalMessage == "" && len(allImagePaths) == 0 {
+		fmt.Println("Error: Either -message or -image must be provided.")
+		fmt.Printf("Usage: %s -message=\"Your message\" [-image=<path|url>] [-link=<url>] [-dry-run] [-rollback]\n", os.Args[0])
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	if *link != "" && *photo != "" {
-		fmt.Println("Error: Cannot specify both -link and -photo at the same time.")
+	if *link != "" && len(allImagePaths) > 0 {
+		fmt.Println("Error: Cannot specify both -link and -image at the same time.")
 		os.Exit(1)
 	}
 
-	apiVersion := "v24.0"
-	endpoint := "feed" // default for text or link posts
+	// Detect and validate images
+	parsedImages, valResult := validateInputs(allImagePaths, finalMessage)
 
-	data := url.Values{
-		"access_token": {accessToken},
+	if *dryRun {
+		printDryRunSummary(valResult)
+		os.Exit(0)
 	}
 
-	if *photo != "" {
-		endpoint = "photos"
-		data.Set("url", *photo)
-		data.Set("caption", *message)
+	if !valResult.Valid {
+		fmt.Println("Validation failed:")
+		for _, err := range valResult.Errors {
+			fmt.Printf("  - %s\n", err)
+		}
+		os.Exit(1)
+	}
+
+	if len(parsedImages) > 0 {
+		results := uploadMultipleImages(parsedImages, finalMessage, accessToken, pageID)
+		printResultsSummary(results)
+	} else if *link != "" {
+		postLink(pageID, finalMessage, *link, accessToken)
 	} else {
-		data.Set("message", *message)
-		if *link != "" {
-			data.Set("link", *link)
+		postText(pageID, finalMessage, accessToken)
+	}
+}
+
+func validateInputs(imagePaths []string, message string) ([]ImageInput, *ValidationResult) {
+	result := &ValidationResult{Valid: true}
+	var parsed []ImageInput
+
+	for _, path := range imagePaths {
+		imgType := detectInputType(path)
+		img := ImageInput{Path: path, Type: imgType}
+
+		if imgType == "file" {
+			info, err := os.Stat(path)
+			if err != nil {
+				result.Valid = false
+				result.Errors = append(result.Errors, fmt.Sprintf("File not found: %s", path))
+				continue
+			}
+			img.Size = info.Size()
+			img.Filename = filepath.Base(path)
+			result.TotalSize += img.Size
+
+			if img.Size > 8*1024*1024 {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("File %s is large (%.2f MB), Facebook limit is 8MB for some types.", img.Filename, float64(img.Size)/1024/1024))
+			}
+
+			ext := strings.ToLower(filepath.Ext(path))
+			validExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".bmp": true, ".tiff": true, ".webp": true}
+			if !validExts[ext] {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("File %s has potentially unsupported extension: %s", img.Filename, ext))
+			}
+		} else {
+			img.Filename = extractFilenameFromURL(path)
+		}
+		parsed = append(parsed, img)
+	}
+
+	if message == "" && len(parsed) == 0 {
+		result.Valid = false
+		result.Errors = append(result.Errors, "Message or images must be provided")
+	}
+
+	result.Images = parsed
+	return parsed, result
+}
+
+func detectInputType(input string) string {
+	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
+		return "url"
+	}
+	return "file"
+}
+
+func extractFilenameFromURL(u string) string {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return "image"
+	}
+	return filepath.Base(parsed.Path)
+}
+
+func printDryRunSummary(result *ValidationResult) {
+	fmt.Println("=== DRY RUN VALIDATION ===")
+	fmt.Printf("Valid: %v\n", result.Valid)
+	fmt.Printf("Total Images: %d\n", len(result.Images))
+	fmt.Printf("Total File Size: %.2f MB\n", float64(result.TotalSize)/1024/1024)
+
+	fmt.Println("\nImages to be processed:")
+	for i, img := range result.Images {
+		fmt.Printf("  %d. %s [%s]", i+1, img.Filename, img.Type)
+		if img.Type == "file" {
+			fmt.Printf(" (%.2f MB)", float64(img.Size)/1024/1024)
+		}
+		fmt.Println()
+	}
+
+	if len(result.Errors) > 0 {
+		fmt.Println("\nErrors:")
+		for _, e := range result.Errors {
+			fmt.Printf("  - %s\n", e)
 		}
 	}
 
-	apiURL := fmt.Sprintf("https://graph.facebook.com/%s/%s/%s", apiVersion, pageID, endpoint)
+	if len(result.Warnings) > 0 {
+		fmt.Println("\nWarnings:")
+		for _, w := range result.Warnings {
+			fmt.Printf("  - %s\n", w)
+		}
+	}
+}
 
-	resp, err := http.PostForm(apiURL, data)
+func uploadMultipleImages(images []ImageInput, message, accessToken, pageID string) []UploadResult {
+	var results []UploadResult
+
+	fmt.Printf("Starting upload of %d images...\n", len(images))
+
+	for i, img := range images {
+		fmt.Printf("\n[%d/%d] %s\n", i+1, len(images), img.Filename)
+
+		var postID string
+		var err error
+
+		if img.Type == "url" {
+			postID, err = postImageURL(pageID, message, img.Path, accessToken)
+		} else {
+			postID, err = postImageFile(pageID, message, img.Path, accessToken)
+		}
+
+		results = append(results, UploadResult{
+			Filename: img.Filename,
+			Success:  err == nil,
+			PostID:   postID,
+			Error:    err,
+		})
+
+		if i < len(images)-1 {
+			fmt.Println("Waiting 1s before next upload to avoid rate limits...")
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	return results
+}
+
+func postImageURL(pageID, message, imageURL, accessToken string) (string, error) {
+	apiURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/photos", pageID)
+	data := url.Values{
+		"access_token": {accessToken},
+		"url":          {imageURL},
+		"caption":      {message},
+	}
+
+	resp, err := client.PostForm(apiURL, data)
 	if err != nil {
-		fmt.Printf("Error sending request: %v\n", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	return handleResponse(resp)
+}
+
+func postImageFile(pageID, message, filePath, accessToken string) (string, error) {
+	apiURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/photos", pageID)
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	info, _ := file.Stat()
+
+	// Create a pipe to stream the upload and track progress
+	bodyReader, bodyWriter := io.Pipe()
+	multiWriter := multipart.NewWriter(bodyWriter)
+
+	errChan := make(chan error, 1)
+
+	go func() {
+		defer bodyWriter.Close()
+		defer multiWriter.Close()
+
+		_ = multiWriter.WriteField("access_token", accessToken)
+		_ = multiWriter.WriteField("caption", message)
+
+		part, err := multiWriter.CreateFormFile("source", filepath.Base(filePath))
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		// Progress bar
+		bar := progressbar.DefaultBytes(
+			info.Size(),
+			"uploading",
+		)
+
+		_, err = io.Copy(io.MultiWriter(part, bar), file)
+		if err != nil {
+			errChan <- err
+			return
+		}
+	}()
+
+	req, err := http.NewRequest("POST", apiURL, bodyReader)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", multiWriter.FormDataContentType())
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	select {
+	case err := <-errChan:
+		return "", err
+	default:
+		return handleResponse(resp)
+	}
+}
+
+func postLink(pageID, message, link, accessToken string) {
+	apiURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/feed", pageID)
+	data := url.Values{
+		"access_token": {accessToken},
+		"message":      {message},
+		"link":         {link},
+	}
+
+	resp, err := client.PostForm(apiURL, data)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	id, err := handleResponse(resp)
 	if err != nil {
-		fmt.Printf("Error reading response: %v\n", err)
+		fmt.Printf("Failed: %v\n", err)
+	} else {
+		fmt.Printf("Published successfully! ID: %s\n", id)
+	}
+}
+
+func postText(pageID, message, accessToken string) {
+	apiURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/feed", pageID)
+	data := url.Values{
+		"access_token": {accessToken},
+		"message":      {message},
+	}
+
+	resp, err := client.PostForm(apiURL, data)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	id, err := handleResponse(resp)
+	if err != nil {
+		fmt.Printf("Failed: %v\n", err)
+	} else {
+		fmt.Printf("Published successfully! ID: %s\n", id)
+	}
+}
+
+func handleResponse(resp *http.Response) (string, error) {
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Status: %s, Body: %s", resp.Status, string(body))
+	}
+
+	var res map[string]interface{}
+	_ = json.Unmarshal(body, &res)
+
+	if id, ok := res["id"].(string); ok {
+		return id, nil
+	}
+
+	return string(body), nil
+}
+
+func printResultsSummary(results []UploadResult) {
+	fmt.Println("\n=== UPLOAD SUMMARY ===")
+	successCount := 0
+	for _, res := range results {
+		if res.Success {
+			fmt.Printf("✓ %s (ID: %s)\n", res.Filename, res.PostID)
+			successCount++
+		} else {
+			fmt.Printf("✗ %s (Error: %v)\n", res.Filename, res.Error)
+		}
+	}
+	fmt.Printf("\nTotal: %d, Succeeded: %d, Failed: %d\n", len(results), successCount, len(results)-successCount)
+}
+
+func rollbackLatestPost(pageID, accessToken string) {
+	fmt.Println("Attempting to rollback latest post...")
+
+	// 1. Fetch latest post ID
+	apiURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/feed?limit=1&access_token=%s", pageID, accessToken)
+	resp, err := client.Get(apiURL)
+	if err != nil {
+		fmt.Printf("Error fetching feed: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Failed to fetch feed. Status: %s, Body: %s\n", resp.Status, string(body))
 		os.Exit(1)
 	}
 
+	var feed struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &feed); err != nil {
+		fmt.Printf("Error parsing feed JSON: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(feed.Data) == 0 {
+		fmt.Println("No posts found to rollback.")
+		return
+	}
+
+	postID := feed.Data[0].ID
+	fmt.Printf("Found latest post ID: %s. Deleting...\n", postID)
+
+	// 2. Delete the post
+	deleteURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s?access_token=%s", postID, accessToken)
+	req, _ := http.NewRequest("DELETE", deleteURL, nil)
+	resp, err = client.Do(req)
+	if err != nil {
+		fmt.Printf("Error sending delete request: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	body, _ = io.ReadAll(resp.Body)
 	if resp.StatusCode == http.StatusOK {
-		fmt.Println("Post published successfully!")
-		fmt.Printf("Response: %s\n", string(body)) // Contains the post ID
+		fmt.Println("Successfully deleted the latest post!")
 	} else {
-		fmt.Printf("Failed to publish post. Status: %s\nResponse: %s\n", resp.Status, string(body))
+		fmt.Printf("Failed to delete post. Status: %s, Body: %s\n", resp.Status, string(body))
+		os.Exit(1)
 	}
 }
