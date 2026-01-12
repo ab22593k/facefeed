@@ -67,7 +67,7 @@ func main() {
 	messageFlag := flag.String("message", "", "The text message/caption to post (required if no images)")
 	link := flag.String("link", "", "Optional URL to share as a link post")
 	dryRun := flag.Bool("dry-run", false, "Validate inputs without uploading")
-	rollback := flag.Bool("rollback", false, "Delete the latest published post")
+	rollback := flag.Bool("rollback", false, "Delete a specific post ID (provided as argument) or the latest if no ID given")
 	timeout := flag.Duration("timeout", 60*time.Second, "HTTP request timeout")
 	flag.Var(&images, "image", "Path to local image file or URL (can be specified multiple times)")
 	flag.Parse()
@@ -97,13 +97,17 @@ func main() {
 	}
 
 	if *rollback {
-		rollbackLatestPost(pageID, accessToken)
+		targetID := ""
+		if len(flag.Args()) > 0 {
+			targetID = flag.Args()[0]
+		}
+		rollbackPost(pageID, targetID, accessToken)
 		os.Exit(0)
 	}
 
 	if finalMessage == "" && len(allImagePaths) == 0 {
 		fmt.Println("Error: Either -message or -image must be provided.")
-		fmt.Printf("Usage: %s -message=\"Your message\" [-image=<path|url>] [-link=<url>] [-dry-run] [-rollback]\n", os.Args[0])
+		fmt.Printf("Usage: %s -message=\"Your message\" [-image=<path|url>] [-link=<url>] [-dry-run] [-rollback [post_id]]\n", os.Args[0])
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -130,7 +134,6 @@ func main() {
 	}
 
 	if len(parsedImages) > 0 {
-
 		results := uploadMultipleImages(parsedImages, finalMessage, accessToken, pageID)
 		printResultsSummary(results)
 	} else if *link != "" {
@@ -435,55 +438,63 @@ func printResultsSummary(results []UploadResult) {
 	fmt.Printf("\nTotal: %d, Succeeded: %d, Failed: %d\n", len(results), successCount, len(results)-successCount)
 }
 
-func rollbackLatestPost(pageID, accessToken string) {
-	fmt.Println("Attempting to rollback latest post...")
+func rollbackPost(pageID, postID, accessToken string) {
+	targetID := postID
 
-	// 1. Fetch latest post ID
-	apiURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/feed?limit=1&access_token=%s", pageID, accessToken)
-	resp, err := client.Get(apiURL)
-	if err != nil {
-		fmt.Printf("Error fetching feed: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
+	if targetID == "" {
+		fmt.Println("No post ID provided. Attempting to rollback latest post...")
 
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Failed to fetch feed. Status: %s, Body: %s\n", resp.Status, string(body))
-		os.Exit(1)
+		// 1. Fetch latest post ID
+		apiURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/feed?limit=1&access_token=%s", pageID, accessToken)
+		resp, err := client.Get(apiURL)
+		if err != nil {
+			fmt.Printf("Error fetching feed: %v\n", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("Failed to fetch feed. Status: %s, Body: %s\n", resp.Status, string(body))
+			os.Exit(1)
+		}
+
+		var feed struct {
+			Data []struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(body, &feed); err != nil {
+			fmt.Printf("Error parsing feed JSON: %v\n", err)
+			os.Exit(1)
+		}
+
+		if len(feed.Data) == 0 {
+			fmt.Println("No posts found to rollback.")
+			return
+		}
+
+		targetID = feed.Data[0].ID
+		fmt.Printf("Found latest post ID: %s\n", targetID)
+	} else {
+		fmt.Printf("Attempting to rollback specific post ID: %s\n", targetID)
 	}
 
-	var feed struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &feed); err != nil {
-		fmt.Printf("Error parsing feed JSON: %v\n", err)
-		os.Exit(1)
-	}
-
-	if len(feed.Data) == 0 {
-		fmt.Println("No posts found to rollback.")
-		return
-	}
-
-	postID := feed.Data[0].ID
-	fmt.Printf("Found latest post ID: %s. Deleting...\n", postID)
+	fmt.Println("Deleting...")
 
 	// 2. Delete the post
-	deleteURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s?access_token=%s", postID, accessToken)
+	deleteURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s?access_token=%s", targetID, accessToken)
 	req, _ := http.NewRequest("DELETE", deleteURL, nil)
-	resp, err = client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Printf("Error sending delete request: %v\n", err)
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
-	body, _ = io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == http.StatusOK {
-		fmt.Println("Successfully deleted the latest post!")
+		fmt.Printf("Successfully deleted post ID: %s\n", targetID)
 	} else {
 		fmt.Printf("Failed to delete post. Status: %s, Body: %s\n", resp.Status, string(body))
 		os.Exit(1)
