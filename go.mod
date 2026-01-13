@@ -1,4 +1,4 @@
-module fbuplish
+module bubble
 
 go 1.25.3
 

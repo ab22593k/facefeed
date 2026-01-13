@@ -1,6 +1,7 @@
 package main
 
 import (
+	theme "bubble/internal"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/schollz/progressbar/v3"
 )
 
 // ImageList is a custom flag type to support multiple image flags
@@ -72,6 +72,8 @@ func main() {
 	flag.Var(&images, "image", "Path to local image file or URL (can be specified multiple times)")
 	flag.Parse()
 
+	theme.PrintHeader()
+
 	client = &http.Client{Timeout: *timeout}
 
 	// Priority: CLI > ENV
@@ -82,8 +84,8 @@ func main() {
 
 	allImagePaths := images
 	if len(allImagePaths) == 0 && envImages != "" {
-		paths := strings.Split(envImages, ",")
-		for _, p := range paths {
+		paths := strings.SplitSeq(envImages, ",")
+		for p := range paths {
 			allImagePaths = append(allImagePaths, strings.TrimSpace(p))
 		}
 	}
@@ -92,7 +94,7 @@ func main() {
 	accessToken := envToken
 
 	if pageID == "" || accessToken == "" {
-		fmt.Println("Error: FB_PAGE_ID and FB_ACCESS_TOKEN environment variables must be set.")
+		theme.Error("FB_PAGE_ID and FB_ACCESS_TOKEN environment variables must be set.")
 		os.Exit(1)
 	}
 
@@ -106,14 +108,14 @@ func main() {
 	}
 
 	if finalMessage == "" && len(allImagePaths) == 0 {
-		fmt.Println("Error: Either -message or -image must be provided.")
-		fmt.Printf("Usage: %s -message=\"Your message\" [-image=<path|url>] [-link=<url>] [-dry-run] [-rollback [post_id]]\n", os.Args[0])
+		theme.Error("Either -message or -image must be provided.")
+		fmt.Printf("%sUsage: %s -message=\"Your message\" [-image=<path|url>] [-link=<url>] [-dry-run] [-rollback [post_id]]%s\n", theme.Gray, os.Args[0], theme.Reset)
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
 	if *link != "" && len(allImagePaths) > 0 {
-		fmt.Println("Error: Cannot specify both -link and -image at the same time.")
+		theme.Error("Cannot specify both -link and -image at the same time.")
 		os.Exit(1)
 	}
 
@@ -126,9 +128,9 @@ func main() {
 	}
 
 	if !valResult.Valid {
-		fmt.Println("Validation failed:")
+		theme.Error("Validation failed:")
 		for _, err := range valResult.Errors {
-			fmt.Printf("  - %s\n", err)
+			fmt.Printf("  %s- %s%s\n", theme.Gray, err, theme.Reset)
 		}
 		os.Exit(1)
 	}
@@ -202,31 +204,31 @@ func extractFilenameFromURL(u string) string {
 }
 
 func printDryRunSummary(result *ValidationResult) {
-	fmt.Println("=== DRY RUN VALIDATION ===")
-	fmt.Printf("Valid: %v\n", result.Valid)
-	fmt.Printf("Total Images: %d\n", len(result.Images))
-	fmt.Printf("Total File Size: %.2f MB\n", float64(result.TotalSize)/1024/1024)
+	theme.PrintSection("Dry Run Validation")
+	theme.Info("Valid", fmt.Sprintf("%v", result.Valid))
+	theme.Info("Total Images", fmt.Sprintf("%d", len(result.Images)))
+	theme.Info("Total Size", fmt.Sprintf("%.2f MB", float64(result.TotalSize)/1024/1024))
 
-	fmt.Println("\nImages to be processed:")
+	fmt.Printf("\n%sImages to be processed:%s\n", theme.Gray, theme.Reset)
 	for i, img := range result.Images {
-		fmt.Printf("  %d. %s [%s]", i+1, img.Filename, img.Type)
+		fmt.Printf("  %s%d. %s [%s]%s", theme.Gray, i+1, img.Filename, img.Type, theme.Reset)
 		if img.Type == "file" {
-			fmt.Printf(" (%.2f MB)", float64(img.Size)/1024/1024)
+			fmt.Printf(" %s(%.2f MB)%s", theme.Gray, float64(img.Size)/1024/1024, theme.Reset)
 		}
 		fmt.Println()
 	}
 
 	if len(result.Errors) > 0 {
-		fmt.Println("\nErrors:")
+		fmt.Printf("\n%sErrors:%s\n", theme.Orange, theme.Reset)
 		for _, e := range result.Errors {
-			fmt.Printf("  - %s\n", e)
+			theme.Error(e)
 		}
 	}
 
 	if len(result.Warnings) > 0 {
-		fmt.Println("\nWarnings:")
+		fmt.Printf("\n%sWarnings:%s\n", theme.Blue, theme.Reset)
 		for _, w := range result.Warnings {
-			fmt.Printf("  - %s\n", w)
+			theme.Warning(w)
 		}
 	}
 }
@@ -234,10 +236,10 @@ func printDryRunSummary(result *ValidationResult) {
 func uploadMultipleImages(images []ImageInput, message, accessToken, pageID string) []UploadResult {
 	var results []UploadResult
 
-	fmt.Printf("Starting upload of %d images...\n", len(images))
+	theme.PrintSection(fmt.Sprintf("Uploading %d Images", len(images)))
 
 	for i, img := range images {
-		fmt.Printf("\n[%d/%d] %s\n", i+1, len(images), img.Filename)
+		fmt.Printf("\n%s[%d/%d]%s %s%s%s\n", theme.Blue, i+1, len(images), theme.Reset, theme.Bold, img.Filename, theme.Reset)
 
 		var postID string
 		var err error
@@ -256,7 +258,7 @@ func uploadMultipleImages(images []ImageInput, message, accessToken, pageID stri
 		})
 
 		if i < len(images)-1 {
-			fmt.Println("Waiting 1s before next upload to avoid rate limits...")
+			theme.Info("Status", "Waiting 1s to avoid rate limits...")
 			time.Sleep(1 * time.Second)
 		}
 	}
@@ -288,7 +290,6 @@ func postImageFile(pageID, message, filePath, accessToken string) (string, error
 	isSVG := strings.ToLower(filepath.Ext(filePath)) == ".svg"
 
 	if isSVG {
-		// Check if ImageMagick's convert command exists
 		if _, err := exec.LookPath("convert"); err != nil {
 			return "", fmt.Errorf("SVG files require ImageMagick (convert command not found).\nInstall: apt-get install imagemagick (Linux) or brew install imagemagick (macOS)")
 		}
@@ -310,7 +311,6 @@ func postImageFile(pageID, message, filePath, accessToken string) (string, error
 
 	info, _ := file.Stat()
 
-	// Create a pipe to stream the upload and track progress
 	bodyReader, bodyWriter := io.Pipe()
 	multiWriter := multipart.NewWriter(bodyWriter)
 
@@ -329,11 +329,7 @@ func postImageFile(pageID, message, filePath, accessToken string) (string, error
 			return
 		}
 
-		// Progress bar
-		bar := progressbar.DefaultBytes(
-			info.Size(),
-			"uploading",
-		)
+		bar := theme.NewProgressBar(info.Size(), "uploading")
 
 		_, err = io.Copy(io.MultiWriter(part, bar), file)
 		if err != nil {
@@ -372,16 +368,16 @@ func postLink(pageID, message, link, accessToken string) {
 
 	resp, err := client.PostForm(apiURL, data)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		theme.Error(fmt.Sprintf("%v", err))
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
 	id, err := handleResponse(resp)
 	if err != nil {
-		fmt.Printf("Failed: %v\n", err)
+		theme.Error(fmt.Sprintf("Failed: %v", err))
 	} else {
-		fmt.Printf("Published successfully! ID: %s\n", id)
+		theme.Success(fmt.Sprintf("Published successfully! ID: %s", id))
 	}
 }
 
@@ -394,16 +390,16 @@ func postText(pageID, message, accessToken string) {
 
 	resp, err := client.PostForm(apiURL, data)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		theme.Error(fmt.Sprintf("%v", err))
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
 	id, err := handleResponse(resp)
 	if err != nil {
-		fmt.Printf("Failed: %v\n", err)
+		theme.Error(fmt.Sprintf("Failed: %v", err))
 	} else {
-		fmt.Printf("Published successfully! ID: %s\n", id)
+		theme.Success(fmt.Sprintf("Published successfully! ID: %s", id))
 	}
 }
 
@@ -414,7 +410,7 @@ func handleResponse(resp *http.Response) (string, error) {
 		return "", fmt.Errorf("Status: %s, Body: %s", resp.Status, string(body))
 	}
 
-	var res map[string]interface{}
+	var res map[string]any
 	_ = json.Unmarshal(body, &res)
 
 	if id, ok := res["id"].(string); ok {
@@ -425,37 +421,38 @@ func handleResponse(resp *http.Response) (string, error) {
 }
 
 func printResultsSummary(results []UploadResult) {
-	fmt.Println("\n=== UPLOAD SUMMARY ===")
+	theme.PrintSection("Upload Summary")
 	successCount := 0
 	for _, res := range results {
 		if res.Success {
-			fmt.Printf("✓ %s (ID: %s)\n", res.Filename, res.PostID)
+			theme.Success(fmt.Sprintf("%s (ID: %s)", res.Filename, res.PostID))
 			successCount++
 		} else {
-			fmt.Printf("✗ %s (Error: %v)\n", res.Filename, res.Error)
+			theme.Error(fmt.Sprintf("%s (Error: %v)", res.Filename, res.Error))
 		}
 	}
-	fmt.Printf("\nTotal: %d, Succeeded: %d, Failed: %d\n", len(results), successCount, len(results)-successCount)
+	theme.Info("Total", fmt.Sprintf("%d", len(results)))
+	theme.Info("Succeeded", fmt.Sprintf("%d", successCount))
+	theme.Info("Failed", fmt.Sprintf("%d", len(results)-successCount))
 }
 
 func rollbackPost(pageID, postID, accessToken string) {
 	targetID := postID
 
 	if targetID == "" {
-		fmt.Println("No post ID provided. Attempting to rollback latest post...")
+		theme.Info("Rollback", "No post ID provided. Fetching latest post...")
 
-		// 1. Fetch latest post ID
 		apiURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/feed?limit=1&access_token=%s", pageID, accessToken)
 		resp, err := client.Get(apiURL)
 		if err != nil {
-			fmt.Printf("Error fetching feed: %v\n", err)
+			theme.Error(fmt.Sprintf("Error fetching feed: %v", err))
 			os.Exit(1)
 		}
 		defer resp.Body.Close()
 
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusOK {
-			fmt.Printf("Failed to fetch feed. Status: %s, Body: %s\n", resp.Status, string(body))
+			theme.Error(fmt.Sprintf("Failed to fetch feed. Status: %s, Body: %s", resp.Status, string(body)))
 			os.Exit(1)
 		}
 
@@ -465,38 +462,37 @@ func rollbackPost(pageID, postID, accessToken string) {
 			} `json:"data"`
 		}
 		if err := json.Unmarshal(body, &feed); err != nil {
-			fmt.Printf("Error parsing feed JSON: %v\n", err)
+			theme.Error(fmt.Sprintf("Error parsing feed JSON: %v", err))
 			os.Exit(1)
 		}
 
 		if len(feed.Data) == 0 {
-			fmt.Println("No posts found to rollback.")
+			theme.Warning("No posts found to rollback.")
 			return
 		}
 
 		targetID = feed.Data[0].ID
-		fmt.Printf("Found latest post ID: %s\n", targetID)
+		theme.Info("Target ID", targetID)
 	} else {
-		fmt.Printf("Attempting to rollback specific post ID: %s\n", targetID)
+		theme.Info("Target ID", targetID)
 	}
 
-	fmt.Println("Deleting...")
+	theme.Info("Status", "Deleting...")
 
-	// 2. Delete the post
 	deleteURL := fmt.Sprintf("https://graph.facebook.com/v24.0/%s?access_token=%s", targetID, accessToken)
 	req, _ := http.NewRequest("DELETE", deleteURL, nil)
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("Error sending delete request: %v\n", err)
+		theme.Error(fmt.Sprintf("Error sending delete request: %v", err))
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == http.StatusOK {
-		fmt.Printf("Successfully deleted post ID: %s\n", targetID)
+		theme.Success(fmt.Sprintf("Successfully deleted post ID: %s", targetID))
 	} else {
-		fmt.Printf("Failed to delete post. Status: %s, Body: %s\n", resp.Status, string(body))
+		theme.Error(fmt.Sprintf("Failed to delete post. Status: %s, Body: %s", resp.Status, string(body)))
 		os.Exit(1)
 	}
 }

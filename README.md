@@ -1,14 +1,15 @@
-# fbuplish
+# bubble
 
-A robust CLI tool for publishing content to Facebook Pages, supporting text, links, and multiple images (including SVGs).
+A robust tool for publishing content to Facebook Pages, supporting text, links, and multiple images.
 
 ## Features
 
+- **Anthropic Brand Identity**: Clean, professional CLI output inspired by Anthropic's visual guidelines.
 - **Text & Link Posts**: Quick sharing of updates and URLs.
 - **Multiple Image Uploads**: Upload one or many photos in a single command.
 - **Local & Remote Support**: Accepts local file paths or public image URLs.
 - **SVG Support**: Automatically converts SVG files to PNG (requires ImageMagick).
-- **Progress Tracking**: Real-time upload progress bars for local files.
+- **Refined Progress Tracking**: Anthropic-themed upload progress bars for local files.
 - **Rollback**: Easily delete the latest post or a specific post by ID.
 - **Dry-Run Mode**: Validate your inputs and file sizes before publishing.
 - **Environment Support**: Load credentials and default content from a `.env` file.
