@@ -8,12 +8,7 @@ import (
 )
 
 func PrintHeader() {
-	header := `
-  ___  _  _  ___  ___  _     ___
- | _ )| || || _ )| _ )| |   | __|
- | _ \| \/ || _ \| _ \| |__ | _|
- |___/ \__/ |___/|___/|____||___|`
-	fmt.Printf("%s%s%s\n", Orange, header, Reset)
+	fmt.Printf("%s%s\n", Orange, Reset)
 	fmt.Printf("%s%sBubble: Robust CLI Facebook Publishing%s\n\n", Gray, Bold, Reset)
 }
 

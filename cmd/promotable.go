@@ -13,8 +13,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// promotablePost represents a single post from the promotable_posts API response.
-type promotablePost struct {
+// adsPost represents a single unpublished post from the ads_posts API response.
+type adsPost struct {
 	ID                   string `json:"id"`
 	Message              string `json:"message"`
 	IsPublished          bool   `json:"is_published"`
@@ -23,9 +23,9 @@ type promotablePost struct {
 	PermalinkURL         string `json:"permalink_url"`
 }
 
-// promotablePostsResponse wraps the paginated API response.
-type promotablePostsResponse struct {
-	Data   []promotablePost `json:"data"`
+// adsPostsResponse wraps the paginated API response.
+type adsPostsResponse struct {
+	Data   []adsPost `json:"data"`
 	Paging *struct {
 		Next string `json:"next"`
 	} `json:"paging"`
@@ -34,12 +34,13 @@ type promotablePostsResponse struct {
 // promotableCmd represents the promotable command.
 var promotableCmd = &cobra.Command{
 	Use:   "promotable",
-	Short: "List all promotable posts (unpublished, drafts, and scheduled)",
-	Long: `List all promotable posts for one or more Facebook Pages.
+	Short: "List all unpublished (dark) posts on a Page",
+	Long: `List all unpublished (dark) posts for one or more Facebook Pages.
 
-Promotable posts include unpublished drafts, scheduled posts, and any other
-posts that can be promoted as ads. Each post shows its ID, status (draft,
-scheduled, or published), message preview, and timestamps.
+Dark posts are unpublished page posts — visible only in the Ads Manager
+and via this API. They include drafts created in the Page composer or
+via API calls with published=false. Each post shows its ID, status (draft
+or scheduled), message preview, and timestamps.
 
 Examples:
   bubble promotable
@@ -76,7 +77,7 @@ Examples:
 		}
 
 		for _, target := range targets {
-			listPromotablePosts(target.ID, envToken, limit)
+			listAdsPosts(target.ID, envToken, limit)
 		}
 	},
 }
@@ -84,13 +85,13 @@ Examples:
 func init() {
 	rootCmd.AddCommand(promotableCmd)
 
-	promotableCmd.Flags().String("groups", "", "Comma-separated list of Group IDs to list promotable posts for")
+	promotableCmd.Flags().String("groups", "", "Comma-separated list of Group IDs to list unpublished posts for")
 	promotableCmd.Flags().String("config", "", "Path to JSON config file for per-target listing")
-	promotableCmd.Flags().Int("limit", 25, "Maximum number of promotable posts to list (1-100)")
+	promotableCmd.Flags().Int("limit", 25, "Maximum number of unpublished posts to list (1-100)")
 }
 
-// postStatus returns a human-readable status string for a promotable post.
-func postStatus(p promotablePost) string {
+// postStatus returns a human-readable status string for an ads post.
+func postStatus(p adsPost) string {
 	if p.IsPublished {
 		return "published"
 	}
@@ -100,40 +101,46 @@ func postStatus(p promotablePost) string {
 	return "draft"
 }
 
-func listPromotablePosts(targetID, accessToken string, limit int) {
-	theme.PrintSection(fmt.Sprintf("Promotable Posts for %s", targetID))
-
+// fetchAdsPosts makes the API request and returns the list of ads posts or an error.
+func fetchAdsPosts(targetID, accessToken string, limit int) ([]adsPost, error) {
 	fields := "id,message,is_published,scheduled_publish_time,created_time,permalink_url"
-	apiURL := fmt.Sprintf("https://graph.facebook.com/"+graphAPIVersion+"/%s/promotable_posts?is_published=false&fields=%s&access_token=%s&limit=%d", targetID, fields, accessToken, limit)
+	apiURL := fmt.Sprintf("https://graph.facebook.com/"+graphAPIVersion+"/%s/ads_posts?fields=%s&access_token=%s&limit=%d", targetID, fields, accessToken, limit)
 	resp, err := client.Get(apiURL)
 	if err != nil {
-		theme.Error(fmt.Sprintf("Error fetching promotable posts: %v", err))
-		return
+		return nil, fmt.Errorf("Error fetching unpublished posts: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Error reading response: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK {
-		theme.Error(fmt.Sprintf("Failed to fetch promotable posts. Status: %s", resp.Status))
-		var errResp struct {
+		var fbErr struct {
 			Error struct {
 				Message string `json:"message"`
 			} `json:"error"`
 		}
-		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Message != "" {
-			theme.Error(errResp.Error.Message)
+		if err := json.Unmarshal(body, &fbErr); err == nil && fbErr.Error.Message != "" {
+			return nil, fmt.Errorf("Failed to fetch unpublished posts. Status: %s: %s", resp.Status, fbErr.Error.Message)
 		}
-		return
+		return nil, fmt.Errorf("Failed to fetch unpublished posts. Status: %s", resp.Status)
 	}
 
-	var result promotablePostsResponse
+	var result adsPostsResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		theme.Error(fmt.Sprintf("Error parsing response: %v", err))
-		return
+		return nil, fmt.Errorf("Error parsing response: %w", err)
 	}
 
-	if len(result.Data) == 0 {
-		theme.Info("Status", "No promotable posts found.")
+	return result.Data, nil
+}
+
+// displayAdsPosts prints the list of posts and a summary to the user.
+func displayAdsPosts(targetID string, posts []adsPost) {
+	theme.PrintSection(fmt.Sprintf("Unpublished Posts for %s", targetID))
+
+	if len(posts) == 0 {
+		theme.Info("Status", "No unpublished posts found.")
 		return
 	}
 
@@ -142,7 +149,7 @@ func listPromotablePosts(targetID, accessToken string, limit int) {
 	scheduledCount := 0
 	publishedCount := 0
 
-	for _, post := range result.Data {
+	for _, post := range posts {
 		status := postStatus(post)
 
 		switch status {
@@ -197,7 +204,7 @@ func listPromotablePosts(targetID, accessToken string, limit int) {
 
 	// Show a breakdown summary.
 	fmt.Println()
-	theme.Info("Total", fmt.Sprintf("%d promotable post(s)", len(result.Data)))
+	theme.Info("Total", fmt.Sprintf("%d unpublished post(s)", len(posts)))
 	if draftCount > 0 {
 		theme.Info("Drafts", fmt.Sprintf("%d", draftCount))
 	}
@@ -207,4 +214,14 @@ func listPromotablePosts(targetID, accessToken string, limit int) {
 	if publishedCount > 0 {
 		theme.Info("Published", fmt.Sprintf("%d", publishedCount))
 	}
+}
+
+// listAdsPosts is a thin wrapper around fetchAdsPosts + displayAdsPosts.
+func listAdsPosts(targetID, accessToken string, limit int) {
+	posts, err := fetchAdsPosts(targetID, accessToken, limit)
+	if err != nil {
+		theme.Error(err.Error())
+		return
+	}
+	displayAdsPosts(targetID, posts)
 }
