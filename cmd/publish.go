@@ -12,7 +12,6 @@ import (
 
 	"facefeed/domain"
 
-	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 )
 
@@ -42,8 +41,6 @@ Examples:
   facefeed publish --message "US only" --targeting '{"geo_locations":{"countries":["US"]}}'
   facefeed publish --message "Tomorrow" --schedule "24h" --targeting @targeting.json`,
 	Run: func(cmd *cobra.Command, args []string) {
-		_ = godotenv.Load()
-
 		envPageID := os.Getenv("FB_PAGE_ID")
 		envToken := os.Getenv("FB_ACCESS_TOKEN")
 		envMessage := os.Getenv("FB_MESSAGE")

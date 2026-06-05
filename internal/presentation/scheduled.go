@@ -2,7 +2,6 @@ package presentation
 
 import (
 	"fmt"
-	"time"
 
 	theme "facefeed/internal"
 	"facefeed/internal/facebook"
@@ -24,18 +23,8 @@ func DisplayScheduledPostList(targetID string, posts []facebook.ScheduledPost, f
 	}
 
 	for _, post := range posts {
-		scheduledTime := "unknown"
-		if post.ScheduledPublishTime > 0 {
-			scheduledTime = time.Unix(post.ScheduledPublishTime, 0).Format("2006-01-02 15:04 MST")
-		}
-
-		msgPreview := post.Message
-		if len(msgPreview) > 80 {
-			msgPreview = msgPreview[:80] + "..."
-		}
-		if msgPreview == "" {
-			msgPreview = "(no message)"
-		}
+		scheduledTime := FormatScheduledTime(post.ScheduledPublishTime)
+		msgPreview := FormatMessage(post.Message)
 
 		fmt.Printf("\n")
 		theme.Info("Post ID", post.ID)

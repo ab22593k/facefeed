@@ -13,7 +13,6 @@ import (
 
 	"facefeed/domain"
 
-	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 )
 
@@ -29,8 +28,6 @@ Examples:
   facefeed rollback 123456789_987654321`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		_ = godotenv.Load()
-
 		envPageID := os.Getenv("FB_PAGE_ID")
 		envToken := os.Getenv("FB_ACCESS_TOKEN")
 		groupsFlag, _ := cmd.Flags().GetString("groups")

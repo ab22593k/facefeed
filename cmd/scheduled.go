@@ -9,7 +9,6 @@ import (
 	"facefeed/internal/presentation"
 	"facefeed/internal/validation"
 
-	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 )
 
@@ -27,8 +26,6 @@ Examples:
   facefeed scheduled --groups group_id
   facefeed scheduled --config targets.json`,
 	Run: func(cmd *cobra.Command, args []string) {
-		_ = godotenv.Load()
-
 		envPageID := os.Getenv("FB_PAGE_ID")
 		envToken := os.Getenv("FB_ACCESS_TOKEN")
 		groupsFlag, _ := cmd.Flags().GetString("groups")

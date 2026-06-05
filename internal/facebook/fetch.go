@@ -45,15 +45,29 @@ type scheduledPostsResponse struct {
 	} `json:"paging"`
 }
 
-// FetchAdsPosts fetches ads (unpublished) posts for a target and returns them.
-func FetchAdsPosts(targetID, accessToken string, limit int) ([]AdsPost, error) {
-	fields := "id,message,is_published,scheduled_publish_time,created_time,permalink_url"
-	apiURL := GraphAPIURL(targetID+"/ads_posts") +
-		fmt.Sprintf("?fields=%s&access_token=%s&limit=%d", fields, accessToken, limit)
+// facebookError wraps the FB API error envelope.
+type facebookError struct {
+	Error struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
 
+// checkFBStatus parses a non-200 Facebook API response and returns a descriptive error.
+// If the response body contains a Facebook error message, it is included in the result.
+func checkFBStatus(body []byte, resp *http.Response, prefix string) error {
+	var fbErr facebookError
+	if err := json.Unmarshal(body, &fbErr); err == nil && fbErr.Error.Message != "" {
+		return fmt.Errorf("%s. Status: %s: %s", prefix, resp.Status, fbErr.Error.Message)
+	}
+	return fmt.Errorf("%s. Status: %s", prefix, resp.Status)
+}
+
+// doFBGet performs a GET request to the Facebook Graph API and reads the response body.
+// It returns the raw body bytes and any transport-level error.
+func doFBGet(apiURL string) ([]byte, error) {
 	resp, err := client.Get(apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("Error fetching unpublished posts: %w", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -62,15 +76,20 @@ func FetchAdsPosts(targetID, accessToken string, limit int) ([]AdsPost, error) {
 		return nil, fmt.Errorf("Error reading response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		var fbErr struct {
-			Error struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal(body, &fbErr); err == nil && fbErr.Error.Message != "" {
-			return nil, fmt.Errorf("Failed to fetch unpublished posts. Status: %s: %s", resp.Status, fbErr.Error.Message)
-		}
-		return nil, fmt.Errorf("Failed to fetch unpublished posts. Status: %s", resp.Status)
+		return nil, checkFBStatus(body, resp, "Failed to fetch")
+	}
+	return body, nil
+}
+
+// FetchAdsPosts fetches ads (unpublished) posts for a target and returns them.
+func FetchAdsPosts(targetID, accessToken string, limit int) ([]AdsPost, error) {
+	fields := "id,message,is_published,scheduled_publish_time,created_time,permalink_url"
+	apiURL := GraphAPIURL(targetID+"/ads_posts") +
+		fmt.Sprintf("?fields=%s&access_token=%s&limit=%d", fields, accessToken, limit)
+
+	body, err := doFBGet(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("Error fetching unpublished posts: %w", err)
 	}
 
 	var result adsPostsResponse
@@ -86,26 +105,9 @@ func FetchScheduledPosts(targetID, accessToken string, limit int) ([]ScheduledPo
 	apiURL := GraphAPIURL(targetID+"/scheduled_posts") +
 		fmt.Sprintf("?access_token=%s&limit=%d", accessToken, limit)
 
-	resp, err := client.Get(apiURL)
+	body, err := doFBGet(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("Error fetching scheduled posts: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("Error reading response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		var fbErr struct {
-			Error struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal(body, &fbErr); err == nil && fbErr.Error.Message != "" {
-			return nil, fmt.Errorf("Failed to fetch scheduled posts. Status: %s: %s", resp.Status, fbErr.Error.Message)
-		}
-		return nil, fmt.Errorf("Failed to fetch scheduled posts. Status: %s", resp.Status)
 	}
 
 	var result scheduledPostsResponse

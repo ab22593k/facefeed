@@ -69,25 +69,32 @@ func PostImageURL(pageID, message, imageURL, accessToken, targetingJSON string, 
 	return postForm(apiURL, data)
 }
 
+// convertSVGToPNG converts an SVG file to a temporary PNG file and returns the PNG path.
+// The caller is responsible for removing the returned file when done.
+func convertSVGToPNG(filePath string) (pngPath string, err error) {
+	if _, err := exec.LookPath("convert"); err != nil {
+		return "", fmt.Errorf("SVG files require ImageMagick (convert command not found).\nInstall: apt-get install imagemagick (Linux) or brew install imagemagick (macOS)")
+	}
+	tempPNG := filePath + ".temp.png"
+	cmd := exec.Command("convert", filePath, tempPNG)
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to convert SVG to PNG: %v", err)
+	}
+	return tempPNG, nil
+}
+
 // PostImageFile uploads a local image file to a Facebook page, converting SVGs to PNGs.
 func PostImageFile(pageID, message, filePath, accessToken, targetingJSON string, scheduleUnix int64) (string, error) {
 	apiURL := GraphAPIURL(pageID + "/photos")
 
 	uploadPath := filePath
-	isSVG := strings.ToLower(filepath.Ext(filePath)) == ".svg"
-
-	if isSVG {
-		if _, err := exec.LookPath("convert"); err != nil {
-			return "", fmt.Errorf("SVG files require ImageMagick (convert command not found).\nInstall: apt-get install imagemagick (Linux) or brew install imagemagick (macOS)")
+	if strings.ToLower(filepath.Ext(filePath)) == ".svg" {
+		pngPath, err := convertSVGToPNG(filePath)
+		if err != nil {
+			return "", err
 		}
-
-		tempPNG := filePath + ".temp.png"
-		cmd := exec.Command("convert", filePath, tempPNG)
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("failed to convert SVG to PNG: %v", err)
-		}
-		uploadPath = tempPNG
-		defer os.Remove(tempPNG)
+		uploadPath = pngPath
+		defer os.Remove(pngPath)
 	}
 
 	file, err := os.Open(uploadPath)
@@ -170,20 +177,13 @@ func UploadPhotoDraft(pageID string, img domain.ImageInput, accessToken string) 
 	apiURL := GraphAPIURL(pageID + "/photos")
 
 	uploadPath := img.Path
-	isSVG := strings.ToLower(filepath.Ext(img.Path)) == ".svg"
-
-	if isSVG {
-		if _, err := exec.LookPath("convert"); err != nil {
-			return "", fmt.Errorf("SVG files require ImageMagick (convert command not found).\nInstall: apt-get install imagemagick (Linux) or brew install imagemagick (macOS)")
+	if strings.ToLower(filepath.Ext(img.Path)) == ".svg" {
+		pngPath, err := convertSVGToPNG(img.Path)
+		if err != nil {
+			return "", err
 		}
-
-		tempPNG := img.Path + ".temp.png"
-		cmd := exec.Command("convert", img.Path, tempPNG)
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("failed to convert SVG to PNG: %v", err)
-		}
-		uploadPath = tempPNG
-		defer os.Remove(tempPNG)
+		uploadPath = pngPath
+		defer os.Remove(pngPath)
 	}
 
 	file, err := os.Open(uploadPath)

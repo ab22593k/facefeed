@@ -6,7 +6,6 @@ import (
 	theme "facefeed/internal"
 	"facefeed/internal/facebook"
 
-	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 )
 
@@ -26,8 +25,6 @@ Examples:
   facefeed delete 987654321_123456789`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		_ = godotenv.Load()
-
 		envToken := os.Getenv("FB_ACCESS_TOKEN")
 
 		if envToken == "" {

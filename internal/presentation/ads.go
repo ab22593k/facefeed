@@ -2,7 +2,6 @@ package presentation
 
 import (
 	"fmt"
-	"time"
 
 	theme "facefeed/internal"
 	"facefeed/internal/facebook"
@@ -39,22 +38,12 @@ func DisplayAdsPostList(targetID string, posts []facebook.AdsPost, fetchErr erro
 			publishedCount++
 		}
 
-		timeInfo := ""
-		if post.ScheduledPublishTime > 0 {
-			timeInfo = time.Unix(post.ScheduledPublishTime, 0).Format("2006-01-02 15:04 MST")
-		} else if post.CreatedTime != "" {
-			if t, err := time.Parse("2006-01-02T15:04:05-0700", post.CreatedTime); err == nil {
-				timeInfo = t.Format("2006-01-02 15:04 MST")
-			}
+		timeInfo := FormatScheduledTime(post.ScheduledPublishTime)
+		if timeInfo == "unknown" && post.CreatedTime != "" {
+			timeInfo = FormatCreatedTime(post.CreatedTime)
 		}
 
-		msgPreview := post.Message
-		if len(msgPreview) > 80 {
-			msgPreview = msgPreview[:80] + "..."
-		}
-		if msgPreview == "" {
-			msgPreview = "(no message)"
-		}
+		msgPreview := FormatMessage(post.Message)
 
 		fmt.Printf("\n")
 		theme.Info("Post ID", post.ID)
@@ -71,9 +60,6 @@ func DisplayAdsPostList(targetID string, posts []facebook.AdsPost, fetchErr erro
 			label = "Created"
 		case "published":
 			label = "Published"
-		}
-		if timeInfo == "" {
-			timeInfo = "unknown"
 		}
 		theme.Info(label, timeInfo)
 	}
