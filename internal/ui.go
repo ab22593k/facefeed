@@ -9,7 +9,7 @@ import (
 
 func PrintHeader() {
 	fmt.Printf("%s%s\n", Orange, Reset)
-	fmt.Printf("%s%sBubble: Robust CLI Facebook Publishing%s\n\n", Gray, Bold, Reset)
+	fmt.Printf("%s%sfacefeed: Robust CLI Facebook Publishing%s\n\n", Gray, Bold, Reset)
 }
 
 func Success(msg string) {

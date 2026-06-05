@@ -1,4 +1,4 @@
-# bubble
+# facefeed
 
 A robust tool for publishing content to Facebook Pages, supporting text, links, and multiple images.
 

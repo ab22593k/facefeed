@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	theme "bubble/internal"
 	"encoding/json"
+	theme "facefeed/internal"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,10 +43,10 @@ via API calls with published=false. Each post shows its ID, status (draft
 or scheduled), message preview, and timestamps.
 
 Examples:
-  bubble promotable
-  bubble promotable --groups group_id
-  bubble promotable --config targets.json
-  bubble promotable --limit 50`,
+  facefeed promotable
+  facefeed promotable --groups group_id
+  facefeed promotable --config targets.json
+  facefeed promotable --limit 50`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = godotenv.Load()
 

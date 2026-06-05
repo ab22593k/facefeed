@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	theme "bubble/internal"
 	"encoding/json"
+	theme "facefeed/internal"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,8 +20,8 @@ var rollbackCmd = &cobra.Command{
 If multiple targets are configured, the post is deleted from all of them.
 
 Examples:
-  bubble rollback
-  bubble rollback 123456789_987654321`,
+  facefeed rollback
+  facefeed rollback 123456789_987654321`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = godotenv.Load()

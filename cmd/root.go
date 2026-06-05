@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	theme "bubble/internal"
+	theme "facefeed/internal"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,9 +15,9 @@ var client *http.Client
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
-	Use:   "bubble",
+	Use:   "facefeed",
 	Short: "Robust CLI Facebook publishing tool",
-	Long: `Bubble is a CLI tool for publishing content to Facebook Pages.
+	Long: `facefeed is a CLI tool for publishing content to Facebook Pages.
 It supports text posts, links, and image uploads (including automatic SVG-to-PNG conversion).
 Content can be published to multiple targets (pages and groups) in a single run.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {

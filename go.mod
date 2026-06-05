@@ -1,4 +1,4 @@
-module bubble
+module facefeed
 
 go 1.25.3
 

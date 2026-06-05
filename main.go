@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bubble/cmd"
+	"facefeed/cmd"
 
 	"github.com/joho/godotenv"
 )

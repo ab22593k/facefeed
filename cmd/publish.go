@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	theme "bubble/internal"
+	theme "facefeed/internal"
 	"fmt"
 	"os"
 	"strings"
@@ -28,14 +28,14 @@ Schedule a post with --schedule:
   --schedule "2h"                      Relative time (30m, 2h, 7d)
 
 Examples:
-  bubble publish --message "Hello, world!"
-  bubble publish --message "Check this out" --link "https://example.com"
-  bubble publish --image photo.jpg --message "My photo"
-  bubble publish --image photo1.jpg --image photo2.jpg --multi-photo --message "Gallery"
-  bubble publish --image url1.jpg --image url2.jpg --groups group1,group2
-  bubble publish --config targets.json --message "Default message"
-  bubble publish --message "US only" --targeting '{"geo_locations":{"countries":["US"]}}'
-  bubble publish --message "Tomorrow" --schedule "24h" --targeting @targeting.json`,
+  facefeed publish --message "Hello, world!"
+  facefeed publish --message "Check this out" --link "https://example.com"
+  facefeed publish --image photo.jpg --message "My photo"
+  facefeed publish --image photo1.jpg --image photo2.jpg --multi-photo --message "Gallery"
+  facefeed publish --image url1.jpg --image url2.jpg --groups group1,group2
+  facefeed publish --config targets.json --message "Default message"
+  facefeed publish --message "US only" --targeting '{"geo_locations":{"countries":["US"]}}'
+  facefeed publish --message "Tomorrow" --schedule "24h" --targeting @targeting.json`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = godotenv.Load()
 
@@ -101,7 +101,7 @@ Examples:
 
 		if finalMessage == "" && len(allImagePaths) == 0 && configPath == "" {
 			theme.Error("Either --message, --image, or --config must be provided.")
-			fmt.Printf("%sUsage: bubble publish --message=\"Your message\" [--image=<path|url>] [--link=<url>] [--groups=id1,id2] [--config=targets.json] [--targeting=<json|@file>] [--multi-photo] [--schedule=<time>] [--dry-run]%s\n", theme.Gray, theme.Reset)
+			fmt.Printf("%sUsage: facefeed publish --message=\"Your message\" [--image=<path|url>] [--link=<url>] [--groups=id1,id2] [--config=targets.json] [--targeting=<json|@file>] [--multi-photo] [--schedule=<time>] [--dry-run]%s\n", theme.Gray, theme.Reset)
 			os.Exit(1)
 		}
 

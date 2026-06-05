@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	theme "bubble/internal"
 	"encoding/json"
+	theme "facefeed/internal"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,9 +43,9 @@ Scheduled posts are posts created with --schedule that have not yet been publish
 The list shows the post ID, message preview, and scheduled time for each post.
 
 Examples:
-  bubble scheduled
-  bubble scheduled --groups group_id
-  bubble scheduled --config targets.json`,
+  facefeed scheduled
+  facefeed scheduled --groups group_id
+  facefeed scheduled --config targets.json`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = godotenv.Load()
 

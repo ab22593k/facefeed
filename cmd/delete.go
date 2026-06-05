@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	theme "bubble/internal"
 	"encoding/json"
+	theme "facefeed/internal"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,8 +24,8 @@ post ID and deletes it immediately without needing page/group configuration.
 The post ID is the one shown by 'scheduled' or 'promotable' commands.
 
 Examples:
-  bubble delete 123456789_987654321
-  bubble delete 987654321_123456789`,
+  facefeed delete 123456789_987654321
+  facefeed delete 987654321_123456789`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = godotenv.Load()

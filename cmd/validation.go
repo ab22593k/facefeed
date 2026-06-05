@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	theme "bubble/internal"
 	"encoding/json"
+	theme "facefeed/internal"
 	"fmt"
 	"net/url"
 	"os"
