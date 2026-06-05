@@ -2,11 +2,16 @@ package cmd
 
 import (
 	"encoding/json"
-	theme "facefeed/internal"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+
+	theme "facefeed/internal"
+	"facefeed/internal/facebook"
+	"facefeed/internal/validation"
+
+	"facefeed/domain"
 
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
@@ -36,7 +41,7 @@ Examples:
 			os.Exit(1)
 		}
 
-		targets, err := resolveTargets(envPageID, groupsFlag, configPath)
+		targets, err := validation.ResolveTargets(envPageID, groupsFlag, configPath)
 		if err != nil {
 			theme.Error(fmt.Sprintf("Failed to resolve targets: %v", err))
 			os.Exit(1)
@@ -63,7 +68,7 @@ func init() {
 	rollbackCmd.Flags().String("config", "", "Path to JSON config file for per-target rollback")
 }
 
-func rollbackPosts(targets []PublishTarget, specificPostID, accessToken string) {
+func rollbackPosts(targets []domain.PublishTarget, specificPostID, accessToken string) {
 	theme.PrintSection("Rollback Batch")
 	for _, target := range targets {
 		theme.Info("Rolling back target", target.ID)
@@ -77,8 +82,8 @@ func rollbackTarget(targetID, postID, accessToken string) {
 	if targetPostID == "" {
 		theme.Info("Rollback", fmt.Sprintf("Fetching latest post for %s...", targetID))
 
-		apiURL := fmt.Sprintf("https://graph.facebook.com/"+graphAPIVersion+"/%s/feed?limit=1&access_token=%s", targetID, accessToken)
-		resp, err := client.Get(apiURL)
+		apiURL := facebook.GraphAPIURL(targetID+"/feed") + fmt.Sprintf("?limit=1&access_token=%s", accessToken)
+		resp, err := facebook.GetClient().Get(apiURL)
 		if err != nil {
 			theme.Error(fmt.Sprintf("Error fetching feed: %v", err))
 			return
@@ -109,5 +114,5 @@ func rollbackTarget(targetID, postID, accessToken string) {
 		targetPostID = feed.Data[0].ID
 	}
 
-	deletePostByID(targetPostID, accessToken)
+	facebook.DeletePostByID(targetPostID, accessToken)
 }

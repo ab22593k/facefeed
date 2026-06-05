@@ -1,11 +1,16 @@
 package cmd
 
 import (
-	theme "facefeed/internal"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	theme "facefeed/internal"
+	"facefeed/internal/facebook"
+	"facefeed/internal/validation"
+
+	"facefeed/domain"
 
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
@@ -55,21 +60,21 @@ Examples:
 		scheduleRaw, _ := cmd.Flags().GetString("schedule")
 
 		// Parse targeting
-		targetingJSON, err := parseTargeting(targetingRaw)
+		targetingJSON, err := validation.ParseTargeting(targetingRaw)
 		if err != nil {
 			theme.Error(fmt.Sprintf("Failed to parse targeting: %v", err))
 			os.Exit(1)
 		}
 
 		// Parse schedule time
-		scheduleUnix, err := parseSchedule(scheduleRaw)
+		scheduleUnix, err := validation.ParseSchedule(scheduleRaw)
 		if err != nil {
 			theme.Error(fmt.Sprintf("Failed to parse schedule time: %v", err))
 			os.Exit(1)
 		}
 
 		// Resolve Targets
-		targets, err := resolveTargets(envPageID, groupsFlag, configPath)
+		targets, err := validation.ResolveTargets(envPageID, groupsFlag, configPath)
 		if err != nil {
 			theme.Error(fmt.Sprintf("Failed to resolve targets: %v", err))
 			os.Exit(1)
@@ -120,10 +125,10 @@ Examples:
 		}
 
 		// Validate inputs
-		parsedImages, valResult := validateInputs(allImagePaths, finalMessage)
+		parsedImages, valResult := validation.ValidateInputs(allImagePaths, finalMessage)
 
 		if dryRun {
-			printDryRunSummary(valResult, targets)
+			validation.PrintDryRunSummary(valResult, targets)
 			if targetingJSON != "" {
 				theme.Info("Targeting", targetingJSON)
 			}
@@ -145,7 +150,7 @@ Examples:
 		}
 
 		// Batch Execution
-		var allTargetResults []TargetResult
+		var allTargetResults []domain.TargetResult
 		for _, target := range targets {
 			theme.PrintSection(fmt.Sprintf("Target: %s", target.ID))
 
@@ -154,10 +159,10 @@ Examples:
 				targetMessage = finalMessage
 			}
 
-			targetRes := TargetResult{TargetID: target.ID}
+			targetRes := domain.TargetResult{TargetID: target.ID}
 
 			if multiPhoto && len(parsedImages) > 0 {
-				postID, err := publishMultiPhoto(parsedImages, targetMessage, envToken, target.ID, targetingJSON, scheduleUnix)
+				postID, err := facebook.PublishMultiPhoto(parsedImages, targetMessage, envToken, target.ID, targetingJSON, scheduleUnix)
 				targetRes.PostID = postID
 				targetRes.Error = err
 				if err != nil {
@@ -166,10 +171,10 @@ Examples:
 					theme.Success(fmt.Sprintf("Multi-photo post published! ID: %s", postID))
 				}
 			} else if len(parsedImages) > 0 {
-				results := uploadMultipleImages(parsedImages, targetMessage, envToken, target.ID, targetingJSON, scheduleUnix)
+				results := facebook.UploadMultipleImages(parsedImages, targetMessage, envToken, target.ID, targetingJSON, scheduleUnix)
 				targetRes.Results = results
 			} else if link != "" {
-				postID, err := postLink(target.ID, targetMessage, link, envToken, targetingJSON, scheduleUnix)
+				postID, err := facebook.PostLink(target.ID, targetMessage, link, envToken, targetingJSON, scheduleUnix)
 				targetRes.PostID = postID
 				targetRes.Error = err
 				if err != nil {
@@ -178,7 +183,7 @@ Examples:
 					theme.Success(fmt.Sprintf("Published successfully! ID: %s", postID))
 				}
 			} else {
-				postID, err := postText(target.ID, targetMessage, envToken, targetingJSON, scheduleUnix)
+				postID, err := facebook.PostText(target.ID, targetMessage, envToken, targetingJSON, scheduleUnix)
 				targetRes.PostID = postID
 				targetRes.Error = err
 				if err != nil {
@@ -190,7 +195,7 @@ Examples:
 			allTargetResults = append(allTargetResults, targetRes)
 		}
 
-		printBatchResultsSummary(allTargetResults)
+		validation.PrintBatchResultsSummary(allTargetResults)
 	},
 }
 

@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"encoding/json"
-	theme "facefeed/internal"
-	"fmt"
-	"io"
-	"net/http"
 	"os"
+
+	theme "facefeed/internal"
+	"facefeed/internal/facebook"
 
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
@@ -38,46 +36,10 @@ Examples:
 		}
 
 		postID := args[0]
-		deletePostByID(postID, envToken)
+		facebook.DeletePostByID(postID, envToken)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(deleteCmd)
-}
-
-func deletePostByID(postID, accessToken string) {
-	theme.PrintSection(fmt.Sprintf("Delete Post %s", postID))
-
-	theme.Info("Post ID", postID)
-	theme.Info("Status", "Deleting...")
-
-	deleteURL := fmt.Sprintf("https://graph.facebook.com/"+graphAPIVersion+"/%s?access_token=%s", postID, accessToken)
-	req, err := http.NewRequest("DELETE", deleteURL, nil)
-	if err != nil {
-		theme.Error(fmt.Sprintf("Error creating delete request: %v", err))
-		return
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		theme.Error(fmt.Sprintf("Error sending delete request: %v", err))
-		return
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode == http.StatusOK {
-		theme.Success(fmt.Sprintf("Successfully deleted post: %s", postID))
-	} else {
-		theme.Error(fmt.Sprintf("Failed to delete post. Status: %s", resp.Status))
-		var errResp struct {
-			Error struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Message != "" {
-			theme.Error(errResp.Error.Message)
-		}
-	}
 }

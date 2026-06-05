@@ -1,8 +1,4 @@
-package cmd
-
-// GraphAPIVersion is the Facebook Graph API version used for all API requests.
-// Bump this to upgrade the API version across all endpoints.
-const graphAPIVersion = "v25.0"
+package domain
 
 // ImageInput represents a single image to upload.
 type ImageInput struct {
