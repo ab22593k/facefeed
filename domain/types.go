@@ -38,3 +38,16 @@ type ValidationResult struct {
 	Warnings  []string
 	TotalSize int64
 }
+
+// InsightData holds a single insight metric value.
+type InsightData struct {
+	Name   string         `json:"name"`
+	Period string         `json:"period"`
+	Values []InsightValue `json:"values"`
+}
+
+// InsightValue represents a single data point within an insight metric.
+type InsightValue struct {
+	Value   interface{} `json:"value"`
+	EndTime string      `json:"end_time"`
+}

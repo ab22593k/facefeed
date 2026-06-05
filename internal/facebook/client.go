@@ -25,6 +25,18 @@ type Client interface {
 	FetchScheduledPosts(targetID string, limit int) ([]ScheduledPost, error)
 	FetchLatestFeedPost(targetID string) (string, error)
 	DeletePostByID(postID string) error
+	// PostVideoUpload uploads and publishes a video to a Page feed.
+	PostVideoUpload(pageID, title, description, filePath string, scheduleUnix int64) (string, error)
+	// PublishReel publishes a video as a Facebook Reel.
+	PublishReel(pageID, description, filePath string) (string, error)
+	// PublishStory publishes a video or photo as a Facebook Story.
+	PublishStory(pageID, filePath string, isVideo bool) (string, error)
+	// ReplyToComment replies to an existing comment on a post.
+	ReplyToComment(commentID, message string) (string, error)
+	// UpdatePost updates the message/content of an existing post.
+	UpdatePost(postID, message string) error
+	// GetInsights retrieves insight metrics for a Page or Post.
+	GetInsights(objectID string, metric string, period string) ([]domain.InsightData, error)
 }
 
 // client is the concrete implementation of Client.
