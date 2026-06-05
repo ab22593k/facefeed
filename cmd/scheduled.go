@@ -5,7 +5,6 @@ import (
 	"os"
 
 	theme "facefeed/internal"
-	"facefeed/internal/facebook"
 	"facefeed/internal/presentation"
 	"facefeed/internal/validation"
 
@@ -53,7 +52,7 @@ Examples:
 		}
 
 		for _, target := range targets {
-			posts, err := facebook.FetchScheduledPosts(target.ID, envToken, limit)
+			posts, err := FBClient.FetchScheduledPosts(target.ID, limit)
 			presentation.DisplayScheduledPostList(target.ID, posts, err)
 		}
 	},

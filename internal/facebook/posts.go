@@ -6,10 +6,10 @@ import (
 )
 
 // PostText publishes a text-only post to a Facebook page or group.
-func PostText(targetID, message, accessToken, targetingJSON string, scheduleUnix int64) (string, error) {
+func (c *fbClient) PostText(targetID, message, targetingJSON string, scheduleUnix int64) (string, error) {
 	apiURL := GraphAPIURL(targetID + "/feed")
 	data := map[string]string{
-		"access_token": accessToken,
+		"access_token": c.accessToken,
 		"message":      message,
 	}
 	if targetingJSON != "" {
@@ -17,14 +17,14 @@ func PostText(targetID, message, accessToken, targetingJSON string, scheduleUnix
 	}
 	addScheduleParams(data, scheduleUnix)
 
-	return postForm(apiURL, data)
+	return c.postForm(apiURL, data)
 }
 
 // PostLink publishes a link post to a Facebook page or group.
-func PostLink(targetID, message, link, accessToken, targetingJSON string, scheduleUnix int64) (string, error) {
+func (c *fbClient) PostLink(targetID, message, link, targetingJSON string, scheduleUnix int64) (string, error) {
 	apiURL := GraphAPIURL(targetID + "/feed")
 	data := map[string]string{
-		"access_token": accessToken,
+		"access_token": c.accessToken,
 		"message":      message,
 		"link":         link,
 	}
@@ -33,12 +33,12 @@ func PostLink(targetID, message, link, accessToken, targetingJSON string, schedu
 	}
 	addScheduleParams(data, scheduleUnix)
 
-	return postForm(apiURL, data)
+	return c.postForm(apiURL, data)
 }
 
 // PostMultiPhoto publishes a post with multiple photos (grid layout) using
 // previously uploaded draft image IDs attached via attached_media.
-func PostMultiPhoto(targetID, message string, mediaIDs []string, accessToken, targetingJSON string, scheduleUnix int64) (string, error) {
+func (c *fbClient) PostMultiPhoto(targetID, message string, mediaIDs []string, targetingJSON string, scheduleUnix int64) (string, error) {
 	apiURL := GraphAPIURL(targetID + "/feed")
 
 	attachedMedia := make([]map[string]string, len(mediaIDs))
@@ -49,7 +49,7 @@ func PostMultiPhoto(targetID, message string, mediaIDs []string, accessToken, ta
 	attachedJSON, _ := json.Marshal(attachedMedia)
 
 	data := map[string]string{
-		"access_token":   accessToken,
+		"access_token":   c.accessToken,
 		"message":        message,
 		"attached_media": string(attachedJSON),
 	}
@@ -58,17 +58,17 @@ func PostMultiPhoto(targetID, message string, mediaIDs []string, accessToken, ta
 	}
 	addScheduleParams(data, scheduleUnix)
 
-	return postForm(apiURL, data)
+	return c.postForm(apiURL, data)
 }
 
 // postForm sends a POST request with form-encoded data and returns the response ID.
-func postForm(apiURL string, data map[string]string) (string, error) {
+func (c *fbClient) postForm(apiURL string, data map[string]string) (string, error) {
 	form := url.Values{}
 	for k, v := range data {
 		form[k] = []string{v}
 	}
 
-	resp, err := client.PostForm(apiURL, form)
+	resp, err := c.httpClient.PostForm(apiURL, form)
 	if err != nil {
 		return "", err
 	}

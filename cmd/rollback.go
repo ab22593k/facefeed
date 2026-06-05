@@ -1,17 +1,12 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 
 	theme "facefeed/internal"
 	"facefeed/internal/facebook"
 	"facefeed/internal/validation"
-
-	"facefeed/domain"
 
 	"github.com/spf13/cobra"
 )
@@ -54,7 +49,11 @@ Examples:
 			specificPostID = args[0]
 		}
 
-		rollbackPosts(targets, specificPostID, envToken)
+		theme.PrintSection("Rollback Batch")
+		for _, target := range targets {
+			theme.Info("Rolling back target", target.ID)
+			rollbackTarget(FBClient, target.ID, specificPostID)
+		}
 	},
 }
 
@@ -65,51 +64,23 @@ func init() {
 	rollbackCmd.Flags().String("config", "", "Path to JSON config file for per-target rollback")
 }
 
-func rollbackPosts(targets []domain.PublishTarget, specificPostID, accessToken string) {
-	theme.PrintSection("Rollback Batch")
-	for _, target := range targets {
-		theme.Info("Rolling back target", target.ID)
-		rollbackTarget(target.ID, specificPostID, accessToken)
-	}
-}
-
-func rollbackTarget(targetID, postID, accessToken string) {
+func rollbackTarget(client facebook.Client, targetID, postID string) {
 	targetPostID := postID
 
 	if targetPostID == "" {
 		theme.Info("Rollback", fmt.Sprintf("Fetching latest post for %s...", targetID))
 
-		apiURL := facebook.GraphAPIURL(targetID+"/feed") + fmt.Sprintf("?limit=1&access_token=%s", accessToken)
-		resp, err := facebook.GetClient().Get(apiURL)
+		var err error
+		targetPostID, err = client.FetchLatestFeedPost(targetID)
 		if err != nil {
-			theme.Error(fmt.Sprintf("Error fetching feed: %v", err))
+			theme.Error(fmt.Sprintf("Failed to fetch latest post: %v", err))
 			return
 		}
-		defer resp.Body.Close()
-
-		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode != http.StatusOK {
-			theme.Error(fmt.Sprintf("Failed to fetch feed. Status: %s, Body: %s", resp.Status, string(body)))
-			return
-		}
-
-		var feed struct {
-			Data []struct {
-				ID string `json:"id"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(body, &feed); err != nil {
-			theme.Error(fmt.Sprintf("Error parsing feed JSON: %v", err))
-			return
-		}
-
-		if len(feed.Data) == 0 {
-			theme.Warning(fmt.Sprintf("No posts found for target %s.", targetID))
-			return
-		}
-
-		targetPostID = feed.Data[0].ID
 	}
 
-	facebook.DeletePostByID(targetPostID, accessToken)
+	if err := client.DeletePostByID(targetPostID); err != nil {
+		theme.Error(fmt.Sprintf("Failed to delete post %s: %v", targetPostID, err))
+	} else {
+		theme.Success(fmt.Sprintf("Deleted post %s", targetPostID))
+	}
 }

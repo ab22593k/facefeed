@@ -5,7 +5,6 @@ import (
 	"os"
 
 	theme "facefeed/internal"
-	"facefeed/internal/facebook"
 	"facefeed/internal/presentation"
 	"facefeed/internal/validation"
 
@@ -56,7 +55,7 @@ Examples:
 		}
 
 		for _, target := range targets {
-			posts, err := facebook.FetchAdsPosts(target.ID, envToken, limit)
+			posts, err := FBClient.FetchAdsPosts(target.ID, limit)
 			presentation.DisplayAdsPostList(target.ID, posts, err)
 		}
 	},

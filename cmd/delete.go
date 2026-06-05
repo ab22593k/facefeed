@@ -1,10 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	theme "facefeed/internal"
-	"facefeed/internal/facebook"
 
 	"github.com/spf13/cobra"
 )
@@ -33,7 +33,11 @@ Examples:
 		}
 
 		postID := args[0]
-		facebook.DeletePostByID(postID, envToken)
+		if err := FBClient.DeletePostByID(postID); err != nil {
+			theme.Error(fmt.Sprintf("Failed to delete post: %v", err))
+			os.Exit(1)
+		}
+		theme.Success(fmt.Sprintf("Successfully deleted post: %s", postID))
 	},
 }
 

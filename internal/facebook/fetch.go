@@ -53,7 +53,6 @@ type facebookError struct {
 }
 
 // checkFBStatus parses a non-200 Facebook API response and returns a descriptive error.
-// If the response body contains a Facebook error message, it is included in the result.
 func checkFBStatus(body []byte, resp *http.Response, prefix string) error {
 	var fbErr facebookError
 	if err := json.Unmarshal(body, &fbErr); err == nil && fbErr.Error.Message != "" {
@@ -62,10 +61,9 @@ func checkFBStatus(body []byte, resp *http.Response, prefix string) error {
 	return fmt.Errorf("%s. Status: %s", prefix, resp.Status)
 }
 
-// doFBGet performs a GET request to the Facebook Graph API and reads the response body.
-// It returns the raw body bytes and any transport-level error.
-func doFBGet(apiURL string) ([]byte, error) {
-	resp, err := client.Get(apiURL)
+// doFBGet performs a GET request using the client's httpClient.
+func (c *fbClient) doFBGet(apiURL string) ([]byte, error) {
+	resp, err := c.httpClient.Get(apiURL)
 	if err != nil {
 		return nil, err
 	}
@@ -82,12 +80,12 @@ func doFBGet(apiURL string) ([]byte, error) {
 }
 
 // FetchAdsPosts fetches ads (unpublished) posts for a target and returns them.
-func FetchAdsPosts(targetID, accessToken string, limit int) ([]AdsPost, error) {
+func (c *fbClient) FetchAdsPosts(targetID string, limit int) ([]AdsPost, error) {
 	fields := "id,message,is_published,scheduled_publish_time,created_time,permalink_url"
 	apiURL := GraphAPIURL(targetID+"/ads_posts") +
-		fmt.Sprintf("?fields=%s&access_token=%s&limit=%d", fields, accessToken, limit)
+		fmt.Sprintf("?fields=%s&access_token=%s&limit=%d", fields, c.accessToken, limit)
 
-	body, err := doFBGet(apiURL)
+	body, err := c.doFBGet(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("Error fetching unpublished posts: %w", err)
 	}
@@ -101,11 +99,11 @@ func FetchAdsPosts(targetID, accessToken string, limit int) ([]AdsPost, error) {
 }
 
 // FetchScheduledPosts fetches scheduled posts for a target and returns them.
-func FetchScheduledPosts(targetID, accessToken string, limit int) ([]ScheduledPost, error) {
+func (c *fbClient) FetchScheduledPosts(targetID string, limit int) ([]ScheduledPost, error) {
 	apiURL := GraphAPIURL(targetID+"/scheduled_posts") +
-		fmt.Sprintf("?access_token=%s&limit=%d", accessToken, limit)
+		fmt.Sprintf("?access_token=%s&limit=%d", c.accessToken, limit)
 
-	body, err := doFBGet(apiURL)
+	body, err := c.doFBGet(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("Error fetching scheduled posts: %w", err)
 	}
@@ -116,4 +114,30 @@ func FetchScheduledPosts(targetID, accessToken string, limit int) ([]ScheduledPo
 	}
 
 	return result.Data, nil
+}
+
+// FetchLatestFeedPost fetches the most recent post ID for a target's feed.
+func (c *fbClient) FetchLatestFeedPost(targetID string) (string, error) {
+	apiURL := GraphAPIURL(targetID+"/feed") +
+		fmt.Sprintf("?limit=1&access_token=%s", c.accessToken)
+
+	body, err := c.doFBGet(apiURL)
+	if err != nil {
+		return "", fmt.Errorf("Error fetching latest feed post: %w", err)
+	}
+
+	var feed struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &feed); err != nil {
+		return "", fmt.Errorf("Error parsing feed response: %w", err)
+	}
+
+	if len(feed.Data) == 0 {
+		return "", fmt.Errorf("no posts found for feed %s", targetID)
+	}
+
+	return feed.Data[0].ID, nil
 }

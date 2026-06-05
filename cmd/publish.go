@@ -7,7 +7,6 @@ import (
 	"time"
 
 	theme "facefeed/internal"
-	"facefeed/internal/facebook"
 	"facefeed/internal/validation"
 
 	"facefeed/domain"
@@ -77,7 +76,7 @@ Examples:
 			os.Exit(1)
 		}
 
-		if envToken == "" {
+		if FBClient == nil || envToken == "" {
 			theme.Error("FB_ACCESS_TOKEN environment variable must be set.")
 			os.Exit(1)
 		}
@@ -159,7 +158,7 @@ Examples:
 			targetRes := domain.TargetResult{TargetID: target.ID}
 
 			if multiPhoto && len(parsedImages) > 0 {
-				postID, err := facebook.PublishMultiPhoto(parsedImages, targetMessage, envToken, target.ID, targetingJSON, scheduleUnix)
+				postID, err := FBClient.PublishMultiPhoto(parsedImages, targetMessage, target.ID, targetingJSON, scheduleUnix)
 				targetRes.PostID = postID
 				targetRes.Error = err
 				if err != nil {
@@ -168,10 +167,10 @@ Examples:
 					theme.Success(fmt.Sprintf("Multi-photo post published! ID: %s", postID))
 				}
 			} else if len(parsedImages) > 0 {
-				results := facebook.UploadMultipleImages(parsedImages, targetMessage, envToken, target.ID, targetingJSON, scheduleUnix)
+				results := FBClient.UploadMultipleImages(parsedImages, targetMessage, target.ID, targetingJSON, scheduleUnix)
 				targetRes.Results = results
 			} else if link != "" {
-				postID, err := facebook.PostLink(target.ID, targetMessage, link, envToken, targetingJSON, scheduleUnix)
+				postID, err := FBClient.PostLink(target.ID, targetMessage, link, targetingJSON, scheduleUnix)
 				targetRes.PostID = postID
 				targetRes.Error = err
 				if err != nil {
@@ -180,7 +179,7 @@ Examples:
 					theme.Success(fmt.Sprintf("Published successfully! ID: %s", postID))
 				}
 			} else {
-				postID, err := facebook.PostText(target.ID, targetMessage, envToken, targetingJSON, scheduleUnix)
+				postID, err := FBClient.PostText(target.ID, targetMessage, targetingJSON, scheduleUnix)
 				targetRes.PostID = postID
 				targetRes.Error = err
 				if err != nil {

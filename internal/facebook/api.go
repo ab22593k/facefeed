@@ -17,7 +17,7 @@ import (
 )
 
 // UploadMultipleImages uploads multiple images to a Facebook page, returning results for each.
-func UploadMultipleImages(images []domain.ImageInput, message, accessToken, pageID, targetingJSON string, scheduleUnix int64) []domain.UploadResult {
+func (c *fbClient) UploadMultipleImages(images []domain.ImageInput, message, pageID, targetingJSON string, scheduleUnix int64) []domain.UploadResult {
 	var results []domain.UploadResult
 
 	if scheduleUnix > 0 {
@@ -32,9 +32,9 @@ func UploadMultipleImages(images []domain.ImageInput, message, accessToken, page
 		var err error
 
 		if img.Type == "url" {
-			postID, err = PostImageURL(pageID, message, img.Path, accessToken, targetingJSON, scheduleUnix)
+			postID, err = c.PostImageURL(pageID, message, img.Path, targetingJSON, scheduleUnix)
 		} else {
-			postID, err = PostImageFile(pageID, message, img.Path, accessToken, targetingJSON, scheduleUnix)
+			postID, err = c.PostImageFile(pageID, message, img.Path, targetingJSON, scheduleUnix)
 		}
 
 		results = append(results, domain.UploadResult{
@@ -54,10 +54,10 @@ func UploadMultipleImages(images []domain.ImageInput, message, accessToken, page
 }
 
 // PostImageURL posts an image from a URL to a Facebook page.
-func PostImageURL(pageID, message, imageURL, accessToken, targetingJSON string, scheduleUnix int64) (string, error) {
+func (c *fbClient) PostImageURL(pageID, message, imageURL, targetingJSON string, scheduleUnix int64) (string, error) {
 	apiURL := GraphAPIURL(pageID + "/photos")
 	data := map[string]string{
-		"access_token": accessToken,
+		"access_token": c.accessToken,
 		"url":          imageURL,
 		"caption":      message,
 	}
@@ -66,7 +66,7 @@ func PostImageURL(pageID, message, imageURL, accessToken, targetingJSON string, 
 	}
 	addScheduleParams(data, scheduleUnix)
 
-	return postForm(apiURL, data)
+	return c.postForm(apiURL, data)
 }
 
 // convertSVGToPNG converts an SVG file to a temporary PNG file and returns the PNG path.
@@ -84,7 +84,7 @@ func convertSVGToPNG(filePath string) (pngPath string, err error) {
 }
 
 // PostImageFile uploads a local image file to a Facebook page, converting SVGs to PNGs.
-func PostImageFile(pageID, message, filePath, accessToken, targetingJSON string, scheduleUnix int64) (string, error) {
+func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string, scheduleUnix int64) (string, error) {
 	apiURL := GraphAPIURL(pageID + "/photos")
 
 	uploadPath := filePath
@@ -114,7 +114,7 @@ func PostImageFile(pageID, message, filePath, accessToken, targetingJSON string,
 		defer bodyWriter.Close()
 		defer multiWriter.Close()
 
-		_ = multiWriter.WriteField("access_token", accessToken)
+		_ = multiWriter.WriteField("access_token", c.accessToken)
 		_ = multiWriter.WriteField("caption", message)
 		if targetingJSON != "" {
 			_ = multiWriter.WriteField("targeting", targetingJSON)
@@ -145,7 +145,7 @@ func PostImageFile(pageID, message, filePath, accessToken, targetingJSON string,
 	}
 	req.Header.Set("Content-Type", multiWriter.FormDataContentType())
 
-	resp, err := client.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -161,16 +161,16 @@ func PostImageFile(pageID, message, filePath, accessToken, targetingJSON string,
 
 // UploadPhotoDraft uploads a single image as an unpublished draft and returns its media ID.
 // It handles both URL and file-based images, including SVG-to-PNG conversion.
-func UploadPhotoDraft(pageID string, img domain.ImageInput, accessToken string) (string, error) {
+func (c *fbClient) UploadPhotoDraft(pageID string, img domain.ImageInput) (string, error) {
 	if img.Type == "url" {
 		apiURL := GraphAPIURL(pageID + "/photos")
 		data := map[string]string{
-			"access_token": accessToken,
+			"access_token": c.accessToken,
 			"url":          img.Path,
 			"published":    "false",
 		}
 
-		return postForm(apiURL, data)
+		return c.postForm(apiURL, data)
 	}
 
 	// File-based upload (multipart)
@@ -201,7 +201,7 @@ func UploadPhotoDraft(pageID string, img domain.ImageInput, accessToken string) 
 		defer bodyWriter.Close()
 		defer multiWriter.Close()
 
-		_ = multiWriter.WriteField("access_token", accessToken)
+		_ = multiWriter.WriteField("access_token", c.accessToken)
 		_ = multiWriter.WriteField("published", "false")
 
 		part, err := multiWriter.CreateFormFile("source", filepath.Base(uploadPath))
@@ -223,7 +223,7 @@ func UploadPhotoDraft(pageID string, img domain.ImageInput, accessToken string) 
 	}
 	req.Header.Set("Content-Type", multiWriter.FormDataContentType())
 
-	resp, err := client.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -243,7 +243,7 @@ func UploadPhotoDraft(pageID string, img domain.ImageInput, accessToken string) 
 
 // PublishMultiPhoto orchestrates a multi-photo post: it uploads each image as an
 // unpublished draft to get media IDs, then creates the final post with attached_media.
-func PublishMultiPhoto(images []domain.ImageInput, message, accessToken, pageID, targetingJSON string, scheduleUnix int64) (string, error) {
+func (c *fbClient) PublishMultiPhoto(images []domain.ImageInput, message, pageID, targetingJSON string, scheduleUnix int64) (string, error) {
 	if scheduleUnix > 0 {
 		theme.Info("Schedule", fmt.Sprintf("Scheduled for %s", time.Unix(scheduleUnix, 0).Format(time.RFC3339)))
 	}
@@ -253,7 +253,7 @@ func PublishMultiPhoto(images []domain.ImageInput, message, accessToken, pageID,
 	for i, img := range images {
 		theme.Info(fmt.Sprintf("  Draft %d/%d", i+1, len(images)), img.Filename)
 
-		id, err := UploadPhotoDraft(pageID, img, accessToken)
+		id, err := c.UploadPhotoDraft(pageID, img)
 		if err != nil {
 			return "", fmt.Errorf("failed to upload draft image %q: %w", img.Filename, err)
 		}
@@ -265,5 +265,5 @@ func PublishMultiPhoto(images []domain.ImageInput, message, accessToken, pageID,
 	}
 
 	theme.Success(fmt.Sprintf("All %d drafts uploaded. Publishing multi-photo post...", len(mediaIDs)))
-	return PostMultiPhoto(pageID, message, mediaIDs, accessToken, targetingJSON, scheduleUnix)
+	return c.PostMultiPhoto(pageID, message, mediaIDs, targetingJSON, scheduleUnix)
 }
