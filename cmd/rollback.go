@@ -109,22 +109,5 @@ func rollbackTarget(targetID, postID, accessToken string) {
 		targetPostID = feed.Data[0].ID
 	}
 
-	theme.Info("Target Post ID", targetPostID)
-	theme.Info("Status", "Deleting...")
-
-	deleteURL := fmt.Sprintf("https://graph.facebook.com/"+graphAPIVersion+"/%s?access_token=%s", targetPostID, accessToken)
-	req, _ := http.NewRequest("DELETE", deleteURL, nil)
-	resp, err := client.Do(req)
-	if err != nil {
-		theme.Error(fmt.Sprintf("Error sending delete request: %v", err))
-		return
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode == http.StatusOK {
-		theme.Success(fmt.Sprintf("Successfully deleted post ID: %s", targetPostID))
-	} else {
-		theme.Error(fmt.Sprintf("Failed to delete post. Status: %s, Body: %s", resp.Status, string(body)))
-	}
+	deletePostByID(targetPostID, accessToken)
 }
