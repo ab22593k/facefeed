@@ -183,9 +183,10 @@ func listPromotablePosts(targetID, accessToken string, limit int) {
 		}
 
 		label := "Scheduled"
-		if status == "draft" {
+		switch status {
+		case "draft":
 			label = "Created"
-		} else if status == "published" {
+		case "published":
 			label = "Published"
 		}
 		if timeInfo == "" {

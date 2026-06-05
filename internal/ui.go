@@ -37,7 +37,6 @@ func NewProgressBar(size int64, description string) *progressbar.ProgressBar {
 	return progressbar.NewOptions64(
 		size,
 		progressbar.OptionSetDescription(fmt.Sprintf("%s%s%s", Gray, description, Reset)),
-		progressbar.OptionSetWriter(nil), // default to stdout
 		progressbar.OptionShowBytes(true),
 		progressbar.OptionSetWidth(15),
 		progressbar.OptionSetTheme(progressbar.Theme{
