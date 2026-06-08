@@ -12,7 +12,7 @@ func HandleResponse(resp *http.Response) (string, error) {
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Status: %s, Body: %s", resp.Status, string(body))
+		return "", fmt.Errorf("status: %s, body: %s", resp.Status, string(body))
 	}
 
 	var res map[string]any

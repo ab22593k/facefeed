@@ -54,7 +54,7 @@ func TestFetchAdsPosts_NetworkError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected network error, got nil")
 	}
-	if !strings.Contains(err.Error(), "Error fetching unpublished posts") {
+	if !strings.Contains(err.Error(), "error fetching unpublished posts") {
 		t.Errorf("expected 'Error fetching unpublished posts' in error, got: %v", err)
 	}
 }
@@ -90,7 +90,7 @@ func TestFetchAdsPosts_InvalidJSON(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "Error parsing response") {
+	if !strings.Contains(err.Error(), "error parsing response") {
 		t.Errorf("expected 'Error parsing response' in error, got: %v", err)
 	}
 }
@@ -178,7 +178,7 @@ func TestFetchScheduledPosts_NetworkError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected network error, got nil")
 	}
-	if !strings.Contains(err.Error(), "Error fetching scheduled posts") {
+	if !strings.Contains(err.Error(), "error fetching scheduled posts") {
 		t.Errorf("expected 'Error fetching scheduled posts' in error, got: %v", err)
 	}
 }

@@ -92,12 +92,12 @@ func (c *fbClient) GetInsights(objectID string, metric string, period string) ([
 
 	body, err := c.doFBGet(apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("Error fetching insights: %w", err)
+		return nil, fmt.Errorf("error fetching insights: %w", err)
 	}
 
 	var result insightResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("Error parsing insights response: %w", err)
+		return nil, fmt.Errorf("error parsing insights response: %w", err)
 	}
 
 	return result.Data, nil

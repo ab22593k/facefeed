@@ -71,7 +71,7 @@ func (c *fbClient) doFBGet(apiURL string) ([]byte, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading response: %w", err)
+		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, checkFBStatus(body, resp, "Failed to fetch")
@@ -87,12 +87,12 @@ func (c *fbClient) FetchAdsPosts(targetID string, limit int) ([]AdsPost, error) 
 
 	body, err := c.doFBGet(apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("Error fetching unpublished posts: %w", err)
+		return nil, fmt.Errorf("error fetching unpublished posts: %w", err)
 	}
 
 	var result adsPostsResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("Error parsing response: %w", err)
+		return nil, fmt.Errorf("error parsing response: %w", err)
 	}
 
 	return result.Data, nil
@@ -105,12 +105,12 @@ func (c *fbClient) FetchScheduledPosts(targetID string, limit int) ([]ScheduledP
 
 	body, err := c.doFBGet(apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("Error fetching scheduled posts: %w", err)
+		return nil, fmt.Errorf("error fetching scheduled posts: %w", err)
 	}
 
 	var result scheduledPostsResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("Error parsing response: %w", err)
+		return nil, fmt.Errorf("error parsing response: %w", err)
 	}
 
 	return result.Data, nil
@@ -123,7 +123,7 @@ func (c *fbClient) FetchLatestFeedPost(targetID string) (string, error) {
 
 	body, err := c.doFBGet(apiURL)
 	if err != nil {
-		return "", fmt.Errorf("Error fetching latest feed post: %w", err)
+		return "", fmt.Errorf("error fetching latest feed post: %w", err)
 	}
 
 	var feed struct {
@@ -132,7 +132,7 @@ func (c *fbClient) FetchLatestFeedPost(targetID string) (string, error) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &feed); err != nil {
-		return "", fmt.Errorf("Error parsing feed response: %w", err)
+		return "", fmt.Errorf("error parsing feed response: %w", err)
 	}
 
 	if len(feed.Data) == 0 {
