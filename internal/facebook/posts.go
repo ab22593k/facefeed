@@ -72,7 +72,7 @@ func (c *fbClient) postForm(apiURL string, data map[string]string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return HandleResponse(resp)
 }

@@ -94,14 +94,14 @@ func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string
 			return "", err
 		}
 		uploadPath = pngPath
-		defer os.Remove(pngPath)
+		defer func() { _ = os.Remove(pngPath) }()
 	}
 
 	file, err := os.Open(uploadPath)
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	info, _ := file.Stat()
 
@@ -111,8 +111,8 @@ func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string
 	errChan := make(chan error, 1)
 
 	go func() {
-		defer bodyWriter.Close()
-		defer multiWriter.Close()
+		defer func() { _ = bodyWriter.Close() }()
+		defer func() { _ = multiWriter.Close() }()
 
 		_ = multiWriter.WriteField("access_token", c.accessToken)
 		_ = multiWriter.WriteField("caption", message)
@@ -149,7 +149,7 @@ func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	select {
 	case err := <-errChan:
@@ -183,14 +183,14 @@ func (c *fbClient) UploadPhotoDraft(pageID string, img domain.ImageInput) (strin
 			return "", err
 		}
 		uploadPath = pngPath
-		defer os.Remove(pngPath)
+		defer func() { _ = os.Remove(pngPath) }()
 	}
 
 	file, err := os.Open(uploadPath)
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	bodyReader, bodyWriter := io.Pipe()
 	multiWriter := multipart.NewWriter(bodyWriter)
@@ -198,8 +198,8 @@ func (c *fbClient) UploadPhotoDraft(pageID string, img domain.ImageInput) (strin
 	errChan := make(chan error, 1)
 
 	go func() {
-		defer bodyWriter.Close()
-		defer multiWriter.Close()
+		defer func() { _ = bodyWriter.Close() }()
+		defer func() { _ = multiWriter.Close() }()
 
 		_ = multiWriter.WriteField("access_token", c.accessToken)
 		_ = multiWriter.WriteField("published", "false")
@@ -227,7 +227,7 @@ func (c *fbClient) UploadPhotoDraft(pageID string, img domain.ImageInput) (strin
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	select {
 	case err := <-errChan:

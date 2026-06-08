@@ -30,7 +30,7 @@ Content can be published to multiple targets (pages and groups) in a single run.
 		FBClient = facebook.New(httpClient, token)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 

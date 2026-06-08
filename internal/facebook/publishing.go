@@ -21,7 +21,7 @@ func (c *fbClient) PostVideoUpload(pageID, title, description, filePath string, 
 	if err != nil {
 		return "", fmt.Errorf("failed to open video file %s: %w", filePath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	bodyReader, bodyWriter := io.Pipe()
 	multiWriter := multipart.NewWriter(bodyWriter)
@@ -29,8 +29,8 @@ func (c *fbClient) PostVideoUpload(pageID, title, description, filePath string, 
 	errChan := make(chan error, 1)
 
 	go func() {
-		defer bodyWriter.Close()
-		defer multiWriter.Close()
+		defer func() { _ = bodyWriter.Close() }()
+		defer func() { _ = multiWriter.Close() }()
 
 		_ = multiWriter.WriteField("access_token", c.accessToken)
 		if title != "" {
@@ -67,7 +67,7 @@ func (c *fbClient) PostVideoUpload(pageID, title, description, filePath string, 
 	if err != nil {
 		return "", fmt.Errorf("failed to upload video: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	select {
 	case err := <-errChan:
@@ -115,7 +115,7 @@ func (c *fbClient) uploadFileToURL(uploadURL, filePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	req, err := http.NewRequest("POST", uploadURL, file)
 	if err != nil {
@@ -127,7 +127,7 @@ func (c *fbClient) uploadFileToURL(uploadURL, filePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to upload file: %w", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return nil
 }
 
@@ -148,7 +148,7 @@ func (c *fbClient) doStartUploadPhase(apiURL, filePath string) (startUploadRespo
 	if err != nil {
 		return startUploadResponse{}, fmt.Errorf("failed to start upload: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -185,7 +185,7 @@ func (c *fbClient) doFinishUploadPhase(apiURL, videoID string, extra url.Values)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finish upload: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -296,7 +296,7 @@ func (c *fbClient) publishPhotoStory(pageID, filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to publish photo story: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -347,7 +347,7 @@ func (c *fbClient) UpdatePost(postID, message string) error {
 	if err != nil {
 		return fmt.Errorf("failed to update post: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
