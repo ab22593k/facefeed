@@ -1,3 +1,4 @@
+// Package cmd defines the CLI commands for publishing content to Facebook Pages.
 package cmd
 
 import (

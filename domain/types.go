@@ -1,4 +1,11 @@
+// Package domain defines core types used across the facefeed application.
 package domain
+
+// Image type constants.
+const (
+	ImageTypeURL  = "url"
+	ImageTypeFile = "file"
+)
 
 // ImageInput represents a single image to upload.
 type ImageInput struct {
@@ -48,6 +55,6 @@ type InsightData struct {
 
 // InsightValue represents a single data point within an insight metric.
 type InsightValue struct {
-	Value   interface{} `json:"value"`
-	EndTime string      `json:"end_time"`
+	Value   any    `json:"value"`
+	EndTime string `json:"end_time"`
 }

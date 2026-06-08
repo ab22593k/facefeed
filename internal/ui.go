@@ -1,3 +1,4 @@
+// Package theme provides a styled terminal UI for the facefeed CLI.
 package theme
 
 import (

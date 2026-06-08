@@ -1,0 +1,67 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - goconst
+  settings:
+    staticcheck:
+      checks:
+        - all
+    errcheck:
+      check-type-assertions: true
+    govet:
+      enable:
+        - shadow
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    errorlint:
+      errorf: true
+    revive:
+      rules:
+        - name: exported
+          severity: warning
+        - name: unused-parameter
+        - name: error-naming
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - opinionated
+        - performance
+      disabled-checks:
+        - whyNoLint
+        - wrapperFunc
+    misspell:
+      locale: US
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - goconst
+          - gocritic
+          - revive
+      - path: ^internal/facebook/
+        linters:
+          - revive
+      - path: ^cmd/
+        linters:
+          - revive
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

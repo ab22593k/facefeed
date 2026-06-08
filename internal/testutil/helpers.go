@@ -1,3 +1,4 @@
+// Package testutil provides shared test helpers for unit tests.
 package testutil
 
 import (

@@ -22,7 +22,7 @@ func FormatMessage(msg string) string {
 // Returns "unknown" if ts is 0 or negative.
 func FormatScheduledTime(ts int64) string {
 	if ts <= 0 {
-		return "unknown"
+		return statusUnknown
 	}
 	return time.Unix(ts, 0).Format("2006-01-02 15:04 MST")
 }
@@ -31,11 +31,11 @@ func FormatScheduledTime(ts int64) string {
 // Returns "unknown" if the string cannot be parsed.
 func FormatCreatedTime(createdTime string) string {
 	if createdTime == "" {
-		return "unknown"
+		return statusUnknown
 	}
 	t, err := time.Parse("2006-01-02T15:04:05-0700", createdTime)
 	if err != nil {
-		return "unknown"
+		return statusUnknown
 	}
 	return t.Format("2006-01-02 15:04 MST")
 }

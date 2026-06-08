@@ -10,7 +10,6 @@ import (
 )
 
 func TestPrintDryRunSummary(t *testing.T) {
-
 	tests := []struct {
 		name    string
 		result  *domain.ValidationResult
@@ -80,7 +79,6 @@ func TestPrintDryRunSummary(t *testing.T) {
 }
 
 func TestPrintBatchResultsSummary(t *testing.T) {
-
 	tests := []struct {
 		name    string
 		results []domain.TargetResult

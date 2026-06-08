@@ -26,7 +26,7 @@ func PrintDryRunSummary(result *domain.ValidationResult, targets []domain.Publis
 	fmt.Printf("\n%sImages to be processed:%s\n", theme.Gray, theme.Reset)
 	for i, img := range result.Images {
 		fmt.Printf("  %s%d. %s [%s]%s", theme.Gray, i+1, img.Filename, img.Type, theme.Reset)
-		if img.Type == "file" {
+		if img.Type == domain.ImageTypeFile {
 			fmt.Printf(" %s(%.2f MB)%s", theme.Gray, float64(img.Size)/1024/1024, theme.Reset)
 		}
 		fmt.Println()

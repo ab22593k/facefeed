@@ -32,7 +32,7 @@ func (c *fbClient) PostVideoUpload(pageID, title, description, filePath string, 
 		defer func() { _ = bodyWriter.Close() }()
 		defer func() { _ = multiWriter.Close() }()
 
-		_ = multiWriter.WriteField("access_token", c.accessToken)
+		_ = multiWriter.WriteField(paramAccessToken, c.accessToken)
 		if title != "" {
 			_ = multiWriter.WriteField("title", title)
 		}
@@ -44,15 +44,15 @@ func (c *fbClient) PostVideoUpload(pageID, title, description, filePath string, 
 			_ = multiWriter.WriteField("scheduled_publish_time", fmt.Sprintf("%d", scheduleUnix))
 		}
 
-		part, err := multiWriter.CreateFormFile("source", filepath.Base(filePath))
-		if err != nil {
-			errChan <- err
+		part, gErr := multiWriter.CreateFormFile("source", filepath.Base(filePath))
+		if gErr != nil {
+			errChan <- gErr
 			return
 		}
 
-		_, err = io.Copy(part, file)
-		if err != nil {
-			errChan <- err
+		_, gErr = io.Copy(part, file)
+		if gErr != nil {
+			errChan <- gErr
 			return
 		}
 	}()
@@ -70,8 +70,8 @@ func (c *fbClient) PostVideoUpload(pageID, title, description, filePath string, 
 	defer func() { _ = resp.Body.Close() }()
 
 	select {
-	case err := <-errChan:
-		return "", err
+	case chanErr := <-errChan:
+		return "", chanErr
 	default:
 		return HandleResponse(resp)
 	}
@@ -88,7 +88,7 @@ type insightResponse struct {
 // GetInsights retrieves insight metrics for a Page or Post.
 func (c *fbClient) GetInsights(objectID string, metric string, period string) ([]domain.InsightData, error) {
 	apiURL := GraphAPIURL(objectID+"/insights") +
-		fmt.Sprintf("?metric=%s&access_token=%s&period=%s", url.QueryEscape(metric), c.accessToken, url.QueryEscape(period))
+		fmt.Sprintf("?metric=%s&"+paramAccessToken+"=%s&period=%s", url.QueryEscape(metric), c.accessToken, url.QueryEscape(period))
 
 	body, err := c.doFBGet(apiURL)
 	if err != nil {
@@ -138,19 +138,22 @@ func (c *fbClient) doStartUploadPhase(apiURL, filePath string) (startUploadRespo
 		return startUploadResponse{}, fmt.Errorf("failed to stat file: %w", err)
 	}
 
+	var resp *http.Response
+	var body []byte
+
 	data := url.Values{
-		"access_token": {c.accessToken},
-		"upload_phase": {"start"},
-		"file_size":    {fmt.Sprintf("%d", info.Size())},
+		paramAccessToken: {c.accessToken},
+		"upload_phase":   {uploadPhaseStart},
+		"file_size":      {fmt.Sprintf("%d", info.Size())},
 	}
 
-	resp, err := c.httpClient.PostForm(apiURL, data)
+	resp, err = c.httpClient.PostForm(apiURL, data)
 	if err != nil {
 		return startUploadResponse{}, fmt.Errorf("failed to start upload: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return startUploadResponse{}, fmt.Errorf("failed to read start response: %w", err)
 	}
@@ -173,21 +176,22 @@ func (c *fbClient) doStartUploadPhase(apiURL, filePath string) (startUploadRespo
 // doFinishUploadPhase sends the finish phase of a Reels/Stories upload.
 func (c *fbClient) doFinishUploadPhase(apiURL, videoID string, extra url.Values) ([]byte, error) {
 	data := url.Values{
-		"access_token": {c.accessToken},
-		"upload_phase": {"finish"},
-		"video_id":     {videoID},
+		paramAccessToken: {c.accessToken},
+		"upload_phase":   {uploadPhaseFinish},
+		paramVideoID:     {videoID},
 	}
 	for k, vals := range extra {
 		data[k] = vals
 	}
 
+	var body []byte
 	resp, err := c.httpClient.PostForm(apiURL, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finish upload: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read finish response: %w", err)
 	}
@@ -210,7 +214,7 @@ func (c *fbClient) PublishReel(pageID, description, filePath string) (string, er
 	}
 
 	// Phase 2: Upload file to the upload URL
-	if err := c.uploadFileToURL(startResp.UploadURL, filePath); err != nil {
+	if err = c.uploadFileToURL(startResp.UploadURL, filePath); err != nil {
 		return "", err
 	}
 
@@ -249,7 +253,7 @@ func (c *fbClient) publishVideoStory(pageID, filePath string) (string, error) {
 	}
 
 	// Phase 2: Upload file
-	if err := c.uploadFileToURL(startResp.UploadURL, filePath); err != nil {
+	if err = c.uploadFileToURL(startResp.UploadURL, filePath); err != nil {
 		return "", err
 	}
 
@@ -276,7 +280,7 @@ func (c *fbClient) publishPhotoStory(pageID, filePath string) (string, error) {
 	// Step 1: Upload photo as draft to get a photo_id
 	img := domain.ImageInput{
 		Path:     filePath,
-		Type:     "file",
+		Type:     domain.ImageTypeFile,
 		Filename: filepath.Base(filePath),
 	}
 
@@ -288,8 +292,8 @@ func (c *fbClient) publishPhotoStory(pageID, filePath string) (string, error) {
 	// Step 2: Create photo story with the photo_id
 	apiURL := GraphAPIURL(pageID + "/photo_stories")
 	data := url.Values{
-		"access_token": {c.accessToken},
-		"photo_id":     {photoID},
+		paramAccessToken: {c.accessToken},
+		"photo_id":       {photoID},
 	}
 
 	resp, err := c.httpClient.PostForm(apiURL, data)
@@ -329,8 +333,8 @@ func (c *fbClient) publishPhotoStory(pageID, filePath string) (string, error) {
 func (c *fbClient) ReplyToComment(commentID, message string) (string, error) {
 	apiURL := GraphAPIURL(commentID + "/comments")
 	data := map[string]string{
-		"access_token": c.accessToken,
-		"message":      message,
+		paramAccessToken: c.accessToken,
+		paramMessage:     message,
 	}
 	return c.postForm(apiURL, data)
 }
@@ -339,8 +343,8 @@ func (c *fbClient) ReplyToComment(commentID, message string) (string, error) {
 func (c *fbClient) UpdatePost(postID, message string) error {
 	apiURL := GraphAPIURL(postID)
 	form := url.Values{
-		"access_token": {c.accessToken},
-		"message":      {message},
+		paramAccessToken: {c.accessToken},
+		paramMessage:     {message},
 	}
 
 	resp, err := c.httpClient.PostForm(apiURL, form)

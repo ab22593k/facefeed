@@ -35,7 +35,7 @@ func DisplayInsights(data []domain.InsightData, err error) {
 
 		for _, v := range metric.Values {
 			valStr := formatInsightValue(v.Value)
-			timeStr := "unknown"
+			timeStr := statusUnknown
 			if v.EndTime != "" {
 				timeStr = v.EndTime
 			}

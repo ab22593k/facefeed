@@ -1,3 +1,4 @@
+// Package facebook implements the Facebook Graph API client for publishing content.
 package facebook
 
 import (
@@ -31,7 +32,7 @@ func (c *fbClient) UploadMultipleImages(images []domain.ImageInput, message, pag
 		var postID string
 		var err error
 
-		if img.Type == "url" {
+		if img.Type == domain.ImageTypeURL {
 			postID, err = c.PostImageURL(pageID, message, img.Path, targetingJSON, scheduleUnix)
 		} else {
 			postID, err = c.PostImageFile(pageID, message, img.Path, targetingJSON, scheduleUnix)
@@ -57,9 +58,8 @@ func (c *fbClient) UploadMultipleImages(images []domain.ImageInput, message, pag
 func (c *fbClient) PostImageURL(pageID, message, imageURL, targetingJSON string, scheduleUnix int64) (string, error) {
 	apiURL := GraphAPIURL(pageID + "/photos")
 	data := map[string]string{
-		"access_token": c.accessToken,
-		"url":          imageURL,
-		"caption":      message,
+		paramAccessToken: c.accessToken, paramURL: imageURL,
+		"caption": message,
 	}
 	if targetingJSON != "" {
 		data["targeting"] = targetingJSON
@@ -78,7 +78,7 @@ func convertSVGToPNG(filePath string) (pngPath string, err error) {
 	tempPNG := filePath + ".temp.png"
 	cmd := exec.Command("convert", filePath, tempPNG)
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to convert SVG to PNG: %v", err)
+		return "", fmt.Errorf("failed to convert SVG to PNG: %w", err)
 	}
 	return tempPNG, nil
 }
@@ -114,7 +114,7 @@ func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string
 		defer func() { _ = bodyWriter.Close() }()
 		defer func() { _ = multiWriter.Close() }()
 
-		_ = multiWriter.WriteField("access_token", c.accessToken)
+		_ = multiWriter.WriteField(paramAccessToken, c.accessToken)
 		_ = multiWriter.WriteField("caption", message)
 		if targetingJSON != "" {
 			_ = multiWriter.WriteField("targeting", targetingJSON)
@@ -124,17 +124,17 @@ func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string
 			_ = multiWriter.WriteField("scheduled_publish_time", fmt.Sprintf("%d", scheduleUnix))
 		}
 
-		part, err := multiWriter.CreateFormFile("source", filepath.Base(uploadPath))
-		if err != nil {
-			errChan <- err
+		part, gErr := multiWriter.CreateFormFile("source", filepath.Base(uploadPath))
+		if gErr != nil {
+			errChan <- gErr
 			return
 		}
 
 		bar := theme.NewProgressBar(info.Size(), "uploading")
 
-		_, err = io.Copy(io.MultiWriter(part, bar), file)
-		if err != nil {
-			errChan <- err
+		_, gErr = io.Copy(io.MultiWriter(part, bar), file)
+		if gErr != nil {
+			errChan <- gErr
 			return
 		}
 	}()
@@ -152,8 +152,8 @@ func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string
 	defer func() { _ = resp.Body.Close() }()
 
 	select {
-	case err := <-errChan:
-		return "", err
+	case chanErr := <-errChan:
+		return "", chanErr
 	default:
 		return HandleResponse(resp)
 	}
@@ -162,12 +162,11 @@ func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string
 // UploadPhotoDraft uploads a single image as an unpublished draft and returns its media ID.
 // It handles both URL and file-based images, including SVG-to-PNG conversion.
 func (c *fbClient) UploadPhotoDraft(pageID string, img domain.ImageInput) (string, error) {
-	if img.Type == "url" {
+	if img.Type == domain.ImageTypeURL {
 		apiURL := GraphAPIURL(pageID + "/photos")
 		data := map[string]string{
-			"access_token": c.accessToken,
-			"url":          img.Path,
-			"published":    "false",
+			paramAccessToken: c.accessToken, paramURL: img.Path,
+			"published": "false",
 		}
 
 		return c.postForm(apiURL, data)
@@ -201,18 +200,18 @@ func (c *fbClient) UploadPhotoDraft(pageID string, img domain.ImageInput) (strin
 		defer func() { _ = bodyWriter.Close() }()
 		defer func() { _ = multiWriter.Close() }()
 
-		_ = multiWriter.WriteField("access_token", c.accessToken)
+		_ = multiWriter.WriteField(paramAccessToken, c.accessToken)
 		_ = multiWriter.WriteField("published", "false")
 
-		part, err := multiWriter.CreateFormFile("source", filepath.Base(uploadPath))
-		if err != nil {
-			errChan <- err
+		part, gErr := multiWriter.CreateFormFile("source", filepath.Base(uploadPath))
+		if gErr != nil {
+			errChan <- gErr
 			return
 		}
 
-		_, err = io.Copy(part, file)
-		if err != nil {
-			errChan <- err
+		_, gErr = io.Copy(part, file)
+		if gErr != nil {
+			errChan <- gErr
 			return
 		}
 	}()
@@ -230,12 +229,12 @@ func (c *fbClient) UploadPhotoDraft(pageID string, img domain.ImageInput) (strin
 	defer func() { _ = resp.Body.Close() }()
 
 	select {
-	case err := <-errChan:
-		return "", err
+	case chanErr := <-errChan:
+		return "", chanErr
 	default:
-		mediaID, err := HandleResponse(resp)
-		if err != nil {
-			return "", fmt.Errorf("failed to upload draft %s: %w", img.Filename, err)
+		mediaID, draftErr := HandleResponse(resp)
+		if draftErr != nil {
+			return "", fmt.Errorf("failed to upload draft %s: %w", img.Filename, draftErr)
 		}
 		return mediaID, nil
 	}

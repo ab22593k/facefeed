@@ -1,3 +1,4 @@
+// Package validation provides input validation, target resolution, and dry-run summaries.
 package validation
 
 import (
@@ -19,7 +20,7 @@ func ValidateInputs(imagePaths []string, message string) ([]domain.ImageInput, *
 		imgType := DetectInputType(path)
 		img := domain.ImageInput{Path: path, Type: imgType}
 
-		if imgType == "file" {
+		if imgType == domain.ImageTypeFile {
 			info, err := os.Stat(path)
 			if err != nil {
 				result.Valid = false
@@ -57,9 +58,9 @@ func ValidateInputs(imagePaths []string, message string) ([]domain.ImageInput, *
 // DetectInputType determines whether an input is a URL or a local file path.
 func DetectInputType(input string) string {
 	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
-		return "url"
+		return domain.ImageTypeURL
 	}
-	return "file"
+	return domain.ImageTypeFile
 }
 
 // ExtractFilenameFromURL extracts the filename portion from a URL.

@@ -9,8 +9,8 @@ import (
 func (c *fbClient) PostText(targetID, message, targetingJSON string, scheduleUnix int64) (string, error) {
 	apiURL := GraphAPIURL(targetID + "/feed")
 	data := map[string]string{
-		"access_token": c.accessToken,
-		"message":      message,
+		paramAccessToken: c.accessToken,
+		paramMessage:     message,
 	}
 	if targetingJSON != "" {
 		data["targeting"] = targetingJSON
@@ -24,9 +24,9 @@ func (c *fbClient) PostText(targetID, message, targetingJSON string, scheduleUni
 func (c *fbClient) PostLink(targetID, message, link, targetingJSON string, scheduleUnix int64) (string, error) {
 	apiURL := GraphAPIURL(targetID + "/feed")
 	data := map[string]string{
-		"access_token": c.accessToken,
-		"message":      message,
-		"link":         link,
+		paramAccessToken: c.accessToken,
+		paramMessage:     message,
+		"link":           link,
 	}
 	if targetingJSON != "" {
 		data["targeting"] = targetingJSON
@@ -49,8 +49,8 @@ func (c *fbClient) PostMultiPhoto(targetID, message string, mediaIDs []string, t
 	attachedJSON, _ := json.Marshal(attachedMedia)
 
 	data := map[string]string{
-		"access_token":   c.accessToken,
-		"message":        message,
+		paramAccessToken: c.accessToken,
+		paramMessage:     message,
 		"attached_media": string(attachedJSON),
 	}
 	if targetingJSON != "" {

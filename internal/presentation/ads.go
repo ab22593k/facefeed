@@ -1,3 +1,4 @@
+// Package presentation provides CLI output formatting for API results.
 package presentation
 
 import (
@@ -30,16 +31,16 @@ func DisplayAdsPostList(targetID string, posts []facebook.AdsPost, fetchErr erro
 		status := PostStatus(post)
 
 		switch status {
-		case "draft":
+		case statusDraft:
 			draftCount++
-		case "scheduled":
+		case statusScheduled:
 			scheduledCount++
-		case "published":
+		case statusPublished:
 			publishedCount++
 		}
 
 		timeInfo := FormatScheduledTime(post.ScheduledPublishTime)
-		if timeInfo == "unknown" && post.CreatedTime != "" {
+		if timeInfo == statusUnknown && post.CreatedTime != "" {
 			timeInfo = FormatCreatedTime(post.CreatedTime)
 		}
 
@@ -50,15 +51,15 @@ func DisplayAdsPostList(targetID string, posts []facebook.AdsPost, fetchErr erro
 		theme.Info("Status", status)
 		theme.Info("Message", msgPreview)
 
-		if post.PermalinkURL != "" && status == "published" {
+		if post.PermalinkURL != "" && status == statusPublished {
 			theme.Info("Link", post.PermalinkURL)
 		}
 
 		label := "Scheduled"
 		switch status {
-		case "draft":
+		case statusDraft:
 			label = "Created"
-		case "published":
+		case statusPublished:
 			label = "Published"
 		}
 		theme.Info(label, timeInfo)
@@ -80,10 +81,10 @@ func DisplayAdsPostList(targetID string, posts []facebook.AdsPost, fetchErr erro
 // PostStatus returns a human-readable status string for an ads post.
 func PostStatus(p facebook.AdsPost) string {
 	if p.IsPublished {
-		return "published"
+		return statusPublished
 	}
 	if p.ScheduledPublishTime > 0 {
-		return "scheduled"
+		return statusScheduled
 	}
-	return "draft"
+	return statusDraft
 }
