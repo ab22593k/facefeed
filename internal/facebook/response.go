@@ -9,7 +9,10 @@ import (
 
 // HandleResponse parses a Facebook API response and extracts the post/media ID.
 func HandleResponse(resp *http.Response) (string, error) {
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("status: %s, body: %s", resp.Status, string(body))
