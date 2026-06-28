@@ -78,6 +78,7 @@ func convertSVGToPNG(filePath string) (pngPath string, err error) {
 	tempPNG := filePath + ".temp.png"
 	cmd := exec.Command("convert", filePath, tempPNG)
 	if err := cmd.Run(); err != nil {
+		_ = os.Remove(tempPNG)
 		return "", fmt.Errorf("failed to convert SVG to PNG: %w", err)
 	}
 	return tempPNG, nil
