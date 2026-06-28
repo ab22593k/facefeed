@@ -113,6 +113,7 @@ func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string
 	go func() {
 		defer func() { _ = bodyWriter.Close() }()
 		defer func() { _ = multiWriter.Close() }()
+		defer close(errChan)
 
 		_ = multiWriter.WriteField(paramAccessToken, c.accessToken)
 		_ = multiWriter.WriteField("caption", message)
@@ -151,12 +152,12 @@ func (c *fbClient) PostImageFile(pageID, message, filePath, targetingJSON string
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	select {
-	case chanErr := <-errChan:
-		return "", chanErr
-	default:
-		return HandleResponse(resp)
+	gErr := <-errChan
+	if gErr != nil {
+		return "", gErr
 	}
+
+	return HandleResponse(resp)
 }
 
 // UploadPhotoDraft uploads a single image as an unpublished draft and returns its media ID.
@@ -199,6 +200,7 @@ func (c *fbClient) UploadPhotoDraft(pageID string, img domain.ImageInput) (strin
 	go func() {
 		defer func() { _ = bodyWriter.Close() }()
 		defer func() { _ = multiWriter.Close() }()
+		defer close(errChan)
 
 		_ = multiWriter.WriteField(paramAccessToken, c.accessToken)
 		_ = multiWriter.WriteField("published", "false")
@@ -228,16 +230,16 @@ func (c *fbClient) UploadPhotoDraft(pageID string, img domain.ImageInput) (strin
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	select {
-	case chanErr := <-errChan:
-		return "", chanErr
-	default:
-		mediaID, draftErr := HandleResponse(resp)
-		if draftErr != nil {
-			return "", fmt.Errorf("failed to upload draft %s: %w", img.Filename, draftErr)
-		}
-		return mediaID, nil
+	gErr := <-errChan
+	if gErr != nil {
+		return "", gErr
 	}
+
+	mediaID, draftErr := HandleResponse(resp)
+	if draftErr != nil {
+		return "", fmt.Errorf("failed to upload draft %s: %w", img.Filename, draftErr)
+	}
+	return mediaID, nil
 }
 
 // PublishMultiPhoto orchestrates a multi-photo post: it uploads each image as an

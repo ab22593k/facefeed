@@ -31,6 +31,7 @@ func (c *fbClient) PostVideoUpload(pageID, title, description, filePath string, 
 	go func() {
 		defer func() { _ = bodyWriter.Close() }()
 		defer func() { _ = multiWriter.Close() }()
+		defer close(errChan)
 
 		_ = multiWriter.WriteField(paramAccessToken, c.accessToken)
 		if title != "" {
@@ -69,12 +70,12 @@ func (c *fbClient) PostVideoUpload(pageID, title, description, filePath string, 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	select {
-	case chanErr := <-errChan:
-		return "", chanErr
-	default:
-		return HandleResponse(resp)
+	gErr := <-errChan
+	if gErr != nil {
+		return "", gErr
 	}
+
+	return HandleResponse(resp)
 }
 
 // insightResponse wraps the API response for the /insights endpoint.
