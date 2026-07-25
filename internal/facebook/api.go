@@ -259,6 +259,9 @@ func (c *fbClient) PublishMultiPhoto(images []domain.ImageInput, message, pageID
 		if err != nil {
 			return "", fmt.Errorf("failed to upload draft image %q: %w", img.Filename, err)
 		}
+		if id == "" {
+			return "", fmt.Errorf("uploaded draft image %q returned empty media ID", img.Filename)
+		}
 		mediaIDs = append(mediaIDs, id)
 
 		if i < len(images)-1 {

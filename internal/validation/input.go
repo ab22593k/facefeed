@@ -57,7 +57,14 @@ func ValidateInputs(imagePaths []string, message string) ([]domain.ImageInput, *
 
 // DetectInputType determines whether an input is a URL or a local file path.
 func DetectInputType(input string) string {
-	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
+	if input == "" {
+		return domain.ImageTypeFile
+	}
+	parsed, err := url.Parse(input)
+	if err != nil {
+		return domain.ImageTypeFile
+	}
+	if parsed.Scheme != "" && parsed.Host != "" {
 		return domain.ImageTypeURL
 	}
 	return domain.ImageTypeFile
